@@ -85,6 +85,32 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #15 — Add `cameraPermission` to image-picker plugin
+- **Reason:** `PermissionService.ts` requests camera permission too; without `cameraPermission` in the plugin options, iOS Info.plist lacks `NSCameraUsageDescription` and the camera request crashes.
+- **Resolution:** `patchAppJsonPlugins` now sets both `photosPermission` + `cameraPermission`.
+
+### Deviation #14 — Use `expo run:android`/`run:ios` for first launch
+- **Reason:** Plan v5 set `package.json#android` = `expo start --android` (matched create-expo-app default). That command requires a custom dev-client to be PRE-INSTALLED on the device — fails with "No development build for this project is installed" on first run because we haven't built one yet.
+- **Resolution:** `patchPackageJsonScripts` now writes:
+  - `start` = `expo start --dev-client` (was `expo start`)
+  - `android` = `expo run:android` (was `expo start --android`) — builds + installs dev-client + launches in one shot
+  - `ios` = `expo run:ios` (was `expo start --ios`)
+  - `prebuild` = `expo prebuild` (new — explicit access if user wants to regenerate native dirs)
+- **Force-upgrades stale defaults** so re-running the CLI on existing scaffolds with the old script values converges to the new ones.
+- README + success-message updated to reflect single-command flow.
+
+### Deviation #13 — Bundle ID format `com.<safeName>` (no `codingpixel.` prefix)
+- **Reason:** User feedback — don't inject app-author namespace into generated app's bundle ID. Apps that own their own scope (e.g. `com.example.myapp`) edit `app.json` after.
+- **Resolution:** `bundleIdFor(name)` returns `com.<safeName>`. Examples: `My Cool App` → `com.mycoolapp`. `cpx-e2e` → `com.cpxe2e`.
+
+### Deviation #16 — `mmkvStorage.ts` API fix (createMMKV → new MMKV)
+- **Reason:** MyRoster's source uses `createMMKV()` factory — that API doesn't exist in `react-native-mmkv` 3.x+ (current 4.3.x). The package now exports `MMKV` as a class. First scaffold using mmkv would crash at module load with `createMMKV is not a function`.
+- **Resolution:** rewrote `templates/base/src/core/redux/mmkvStorage.ts` to use `new MMKV()`. Also fixed `removeItem` to use `storage.delete(key)` (was `storage.remove(key)`, also nonexistent).
+
+### Deviation #17 — `useSafeArea` re-exports `useSafeAreaInsets` directly
+- **Reason:** MyRoster's `appSafeAreaInsets` defined a custom React context populated by `SafeAreaInsetsProvider`. V5 plan dropped that provider from the layout tree (deemed Android-padding tweak unnecessary). Result: `useSafeArea()` returned an empty object, so `AppWrapper`/`AppButton` got `insets.top = undefined` → no safe-area padding applied → content rendered under iPhone notch.
+- **Resolution:** `useSafeArea` is now a thin re-export of `useSafeAreaInsets` from `react-native-safe-area-context`. No custom context, no missing provider. Components using `useSafeArea()` keep compiling unchanged.
+
 ### Deviation #12 — `patchAppJson` sets `android.package` + `ios.bundleIdentifier`
 - **Reason:** `expo run:android` / `expo run:ios` errors with `Required property 'android.package' is not found in the project app.json` (or `ios.bundleIdentifier`). create-expo-app's blank-typescript template no longer ships defaults for these on SDK 54.
 - **Resolution:** `patchAppJson` derives a reverse-DNS bundle ID from the user-supplied app name via new `bundleIdFor(name)` helper. Format: `com.codingpixel.<safeName>` where `safeName` = slugified-name with dashes stripped + leading-digit guard. Preserves user-set values.

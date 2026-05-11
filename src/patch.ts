@@ -44,9 +44,9 @@ export function bundleIdSegment(name: string): string {
   return seg || "app";
 }
 
-/** Compose the full bundle identifier with the `com.codingpixel.` namespace prefix. */
+/** Compose the full bundle identifier — `com.<safeName>` (no app-author namespace). */
 export function bundleIdFor(name: string): string {
-  return `com.codingpixel.${bundleIdSegment(name)}`;
+  return `com.${bundleIdSegment(name)}`;
 }
 
 function readJson<T>(p: string): T {
@@ -130,6 +130,10 @@ export function patchAppJsonPlugins(target: string, answers: Answers): void {
     {
       photosPermission:
         "The app accesses your photos to let you share them with your friends.",
+      cameraPermission:
+        "The app accesses your camera to let you take photos to share.",
+      // microphone optional — only set if app records video. Add manually:
+      //   "microphonePermission": "...",
     },
   ];
   if (!json.expo.plugins.some((e) => nameOf(e) === nameOf(entry))) {
@@ -215,15 +219,34 @@ export function patchPackageJsonScripts(target: string): void {
     [k: string]: unknown;
   }>(p);
   pkg.scripts ??= {};
+  // Use `run:android` / `run:ios` so first invocation builds + installs the
+  // custom dev-client (we ship `expo-dev-client` + `react-native-mmkv`, both
+  // Expo-Go-incompatible). `expo start --android` would error with "No
+  // development build for this project is installed" otherwise.
+  // `start` uses `--dev-client` so subsequent runs (after first build)
+  // connect to the installed client correctly.
   const want: Record<string, string> = {
-    start: "expo start",
-    android: "expo start --android",
-    ios: "expo start --ios",
+    start: "expo start --dev-client",
+    android: "expo run:android",
+    ios: "expo run:ios",
     web: "expo start --web",
     lint: "expo lint",
+    prebuild: "expo prebuild",
   };
   for (const [k, v] of Object.entries(want)) {
     if (!(k in pkg.scripts)) pkg.scripts[k] = v;
+  }
+  // Force-update if upstream defaults from create-expo-app are present (so
+  // existing scaffolds re-running the CLI also get the corrected scripts).
+  const stale: Record<string, string> = {
+    "expo start": "expo start --dev-client",
+    "expo start --android": "expo run:android",
+    "expo start --ios": "expo run:ios",
+  };
+  for (const [scriptName, current] of Object.entries(pkg.scripts)) {
+    if (scriptName in want && stale[current] === want[scriptName]) {
+      pkg.scripts[scriptName] = want[scriptName];
+    }
   }
   writeJson(p, pkg);
 }

@@ -134,10 +134,15 @@ async function main(): Promise<void> {
   log.success(`Project ready at ${target.dir}`);
   log.raw("");
   log.raw(`  cd ${path.relative(process.cwd(), target.dir) || target.name}`);
-  log.raw(`  npx expo prebuild`);
-  log.raw(`  ${cmdPm} ios       # or: ${cmdPm} android`);
+  log.raw(`  ${cmdPm} ios       # one-time: builds + installs custom dev-client + launches`);
+  log.raw(`  ${cmdPm} android   # same for android (needs emulator/device + Android SDK)`);
   log.raw("");
-  log.info("First-time dev-client build details: README → 'First-time dev-client build'.");
+  log.raw(`  ${cmdPm} start     # subsequent runs: faster — connects to installed dev-client`);
+  log.raw("");
+  log.info(
+    "First run takes 3-10 min (native build). After that, `start` is fast. " +
+      "iOS needs Xcode + CocoaPods; Android needs SDK + emulator. Not Expo-Go-compatible.",
+  );
 }
 
 main().catch((err) => {

@@ -1,24 +1,9 @@
-import { RF } from '@theme/responsive';
-import { ANDROID } from '@utils/constants';
-import React, { createContext, useContext } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// V5 plan dropped MyRoster's `SafeAreaInsetsProvider` (Android-padding tweak)
+// from `_layout.tsx` — relying on stock `react-native-safe-area-context` is
+// cleaner and avoids a context that was never wrapped around the tree.
+//
+// `useSafeArea` is preserved as a thin re-export so existing component code
+// (AppWrapper, AppButton, etc.) keeps compiling without edits.
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const SafeAreaInsetsContext = createContext({});
-
-export const SafeAreaInsetsProvider = ({ children }: any) => {
-  let insets = useSafeAreaInsets();
-  let customInsets = { ...insets };
-  if (ANDROID) {
-    customInsets = { ...insets, bottom: insets?.bottom + RF(12) };
-  }
-
-  return (
-    <SafeAreaInsetsContext.Provider value={customInsets}>
-      {children}
-    </SafeAreaInsetsContext.Provider>
-  );
-};
-
-export const useSafeArea = () => {
-  return useContext(SafeAreaInsetsContext);
-};
+export const useSafeArea = useSafeAreaInsets;

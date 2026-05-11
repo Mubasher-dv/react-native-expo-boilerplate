@@ -7,9 +7,12 @@ Opinionated Expo SDK 54+ app scaffolder. Mirrors the [MyRoster](https://github.c
 ```bash
 npx codingpixel-expo-app my-app
 cd my-app
-npx expo prebuild
-yarn ios       # or: npm run ios / yarn android / npm run android
+yarn ios          # or: yarn android  (npm run ios / npm run android also work)
 ```
+
+`yarn ios` / `yarn android` map to `expo run:ios` / `expo run:android` — these BUILD + install the custom dev-client + launch in one shot (3-10 min the first time, fast incremental after). No separate `expo prebuild` step needed.
+
+For subsequent runs after the dev-client is installed, use `yarn start` (= `expo start --dev-client`) for faster iteration.
 
 The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
 
@@ -23,14 +26,13 @@ This template ships native modules that Expo Go can't load:
 - `react-native-keyboard-controller`
 - `@gorhom/bottom-sheet` (when bottom-sheet support enabled)
 
-You **must** prebuild + run a custom dev-client:
+You **must** run a custom dev-client. `yarn ios` / `yarn android` (= `expo run:ios` / `expo run:android`) handle prebuild + native build + dev-client install in one command:
 
 ```bash
-npx expo prebuild
 yarn ios       # or yarn android / npm run ios / npm run android
 ```
 
-Subsequent runs use the dev-client + bundler (`yarn start`).
+Subsequent runs use the dev-client + bundler (`yarn start` = `expo start --dev-client`).
 
 ## Fonts
 
@@ -48,12 +50,14 @@ If your generated app's `tsconfig.json` already has a `@/*` mapping, the CLI pre
 
 iOS:
 - Xcode + CocoaPods installed (`sudo gem install cocoapods` if missing).
-- `npx expo prebuild` then `yarn ios` (or `npm run ios`) — opens the iOS simulator with your custom dev-client.
+- `yarn ios` (or `npm run ios`) — generates `ios/` dir, runs CocoaPods, builds the dev-client, installs in simulator, launches.
 
 Android:
 - Android SDK + emulator running (or a USB-attached device with debugging enabled).
 - `JAVA_HOME` pointing at JDK 17.
-- `npx expo prebuild` then `yarn android` (or `npm run android`).
+- `yarn android` (or `npm run android`) — generates `android/` dir, builds the dev-client APK, installs, launches.
+
+Bundle identifier defaults to `com.<app-name-no-dashes>` (e.g. `com.myapp`). Edit `app.json` `expo.ios.bundleIdentifier` + `expo.android.package` before submitting to App Store / Play Store.
 
 ## Expo SDK compatibility
 
