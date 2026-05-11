@@ -1,6 +1,6 @@
 {
   "name": "codingpixel-expo-app",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Opinionated Expo app scaffolder mirroring MyRoster conventions.",
   "type": "module",
   "bin": {
