@@ -83,9 +83,15 @@ async function main(): Promise<void> {
   applyBase(target.dir, templatesRoot);
 
   // Ensure empty dirs that npm strips from the tarball still exist in the
-  // generated app (Deviation #22). `src/features/` + `src/core/hooks/` are
-  // intentionally empty placeholders apps fill as features grow.
-  for (const rel of ["src/features", "src/core/hooks"]) {
+  // generated app (Deviation #22 + extension). All four are intentionally
+  // empty placeholders apps fill as features grow / they drop fonts/images.
+  // No `.gitkeep` is shipped — `ensureDir` creates the bare directory.
+  for (const rel of [
+    "src/features",
+    "src/core/hooks",
+    "src/assets/fonts",
+    "src/assets/images",
+  ]) {
     ensureDir(path.join(target.dir, rel));
   }
 
