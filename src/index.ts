@@ -137,12 +137,6 @@ async function main(): Promise<void> {
   log.raw(`  npx expo prebuild`);
   log.raw(`  ${cmdPm} ios       # or: ${cmdPm} android`);
   log.raw("");
-  if (answers.primaryFont) {
-    log.info(
-      `Drop matching .ttf files into assets/fonts/ (e.g. ${answers.primaryFont}-Regular.ttf). ` +
-        "See README → 'Adding fonts after install'.",
-    );
-  }
   log.info("First-time dev-client build details: README → 'First-time dev-client build'.");
 }
 

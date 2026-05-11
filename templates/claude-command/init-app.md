@@ -12,26 +12,22 @@ Use **AskUserQuestion** to resolve every answer up front. The CLI itself runs wi
 Ask the user, in this order:
 
 1. **App name / target directory** (required, non-empty string). This becomes the positional CLI arg AND substitutes into the env-var command below. Do NOT pass the literal string `<dir>` — substitute the real value.
-2. **Primary font name** (string, may be empty for "no fonts"). Example: `Inter`.
-3. **Secondary font name** (string, may be empty). Skipped automatically if primary is empty.
-4. **Include bottom-sheet support?** (yes/no → "1" or "0").
-5. **Include image-picker support?** (yes/no → "1" or "0").
-6. **Package manager** (yarn or npm).
+2. **Include bottom-sheet support?** (yes/no → "1" or "0").
+3. **Include image-picker support?** (yes/no → "1" or "0").
+4. **Package manager** (yarn or npm).
+
+Fonts are intentionally disabled in this CLI version (Deviation #9 in `docs/MIRROR_NOTES.md`) — `Fonts = {}` ships in the generated app and `EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` env vars are silently ignored.
 
 ## Step 2 — Run the CLI
 
 Substitute every answer into the command. **Replace `my-app` with the resolved app name from step 1** before invoking:
 
 ```bash
-EXPO_PRIMARY_FONT="Inter" \
-  EXPO_SECONDARY_FONT="Roboto" \
-  EXPO_INCLUDE_BOTTOM_SHEET="0" \
+EXPO_INCLUDE_BOTTOM_SHEET="0" \
   EXPO_INCLUDE_IMAGE_PICKER="0" \
   EXPO_PACKAGE_MANAGER="yarn" \
   npx --yes @codingpixel/create-expo-app my-app
 ```
-
-For "no fonts" runs, set `EXPO_PRIMARY_FONT=""` (empty string is the explicit opt-out signal — the CLI distinguishes empty-string from undefined).
 
 ## Step 3 — After the CLI completes
 

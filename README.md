@@ -32,20 +32,11 @@ yarn ios       # or yarn android / npm run ios / npm run android
 
 Subsequent runs use the dev-client + bundler (`yarn start`).
 
-## Adding fonts after install
+## Fonts
 
-The CLI generates `src/ui/theme/fonts.ts` from your `EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` answers using filename convention `<FontName>-<Weight>.ttf` for `Regular`, `Medium`, `SemiBold`, `Bold`.
+Fonts are intentionally disabled in v0.1.x — generated `src/ui/theme/fonts.ts` exports `Fonts = {} as const` + `FontKey = never`, and `_layout.tsx` ships without `useFonts`. Apps that need custom fonts wire `expo-font` themselves (drop `.ttf`s into `assets/fonts/`, populate `Fonts`, add `useFonts(...)` + a loading guard in `_layout.tsx`).
 
-Drop the matching files into `assets/fonts/` (created by the CLI):
-
-```
-assets/fonts/Inter-Regular.ttf
-assets/fonts/Inter-Medium.ttf
-assets/fonts/Inter-SemiBold.ttf
-assets/fonts/Inter-Bold.ttf
-```
-
-Metro logs missing entries on bundle. The `useFonts(...)` call inside `_layout.tsx` references all 4 (or 8 with secondary) at once.
+`expo-font` is already in `dependencies`, so no extra install is needed.
 
 ## `@/*` alias
 
@@ -72,15 +63,15 @@ If `expo install` reports version-resolution failures, the CLI runs an isolation
 
 ## Environment variables (non-interactive runs)
 
-All four are required when stdin is not a TTY (e.g. slash-command flows). Empty string is a valid signal — `EXPO_PRIMARY_FONT=""` means "explicitly no fonts".
+Required when stdin is not a TTY (e.g. slash-command flows).
 
 | Var | Type | Notes |
 |---|---|---|
-| `EXPO_PRIMARY_FONT` | string | Empty → skip fonts. Skips secondary too. |
-| `EXPO_SECONDARY_FONT` | string | Skipped automatically if primary empty. |
 | `EXPO_INCLUDE_BOTTOM_SHEET` | `"0"` or `"1"` | Other values throw before any fs mutation. |
 | `EXPO_INCLUDE_IMAGE_PICKER` | `"0"` or `"1"` | Same. |
 | `EXPO_PACKAGE_MANAGER` | `"yarn"` or `"npm"` | Optional override; auto-detect otherwise. Other values throw. |
+
+`EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` are silently ignored (fonts disabled — see "Fonts" above).
 
 ## Bin name + scope
 

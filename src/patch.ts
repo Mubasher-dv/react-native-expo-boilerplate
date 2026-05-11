@@ -50,9 +50,14 @@ const nameOf = (entry: unknown): string =>
   Array.isArray(entry) ? String(entry[0]) : String(entry);
 
 /**
- * Phase 4 step 7 — set `expo.scheme = slugify(name)`, add `"expo-router"` to
- * `expo.plugins` if missing. Uses `nameOf` equality predicate so a user-customized
- * `["expo-router", {...options}]` entry is preserved (matches Phase 5 step 5).
+ * Phase 4 step 7 — set `expo.name`, `expo.slug`, `expo.scheme = slugify(name)`,
+ * add `"expo-router"` to `expo.plugins` if missing. Uses `nameOf` equality
+ * predicate so a user-customized `["expo-router", {...options}]` entry is
+ * preserved (matches Phase 5 step 5).
+ *
+ * `expo.name` + `expo.slug` are also set by create-expo-app from the positional
+ * dir arg — we set them again here (defense in depth) so the values are
+ * guaranteed even if upstream changes its naming heuristic.
  */
 export function patchAppJson(
   target: string,
@@ -65,6 +70,8 @@ export function patchAppJson(
   }
   const json = readJson<ExpoAppJson>(p);
   json.expo ??= {};
+  json.expo.name = name;
+  json.expo.slug = slugify(name);
   json.expo.scheme = slugify(name);
   json.expo.plugins ??= [];
   if (!json.expo.plugins.some((e) => nameOf(e) === "expo-router")) {

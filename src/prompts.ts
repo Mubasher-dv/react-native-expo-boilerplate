@@ -46,12 +46,6 @@ function readBoolEnv(key: string): boolean | undefined {
   return v === "1";
 }
 
-function readStringEnv(key: string): string | undefined {
-  const v = process.env[key];
-  if (v === undefined) return undefined;
-  return v; // empty string IS a valid signal ("user explicitly chose no font").
-}
-
 async function probeBin(bin: string, timeout = 3000): Promise<boolean> {
   try {
     const result = await execa(bin, ["--version"], { timeout, reject: false });
@@ -84,59 +78,31 @@ export async function detectPackageManager(): Promise<PackageManager> {
 
 /**
  * Gather all answers — env vars take precedence; missing values prompted from TTY.
- * Non-TTY + missing answer → throw (per Phase 2 step 3).
+ * Non-TTY + missing answer → throw.
+ *
+ * NOTE: Fonts are intentionally hard-coded empty (Deviation #9). The generator
+ * empty-path produces `Fonts = {} as const` + drops `useFonts` sentinels →
+ * generated app has no font wiring. EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT
+ * env vars are silently ignored (still shape-validated by validateEnvVars).
  */
 export async function gatherAnswers(): Promise<Answers> {
-  // Shape already validated by validateEnvVars(); trust the values here.
-  const envPrimary = readStringEnv("EXPO_PRIMARY_FONT");
-  const envSecondary = readStringEnv("EXPO_SECONDARY_FONT");
+  // Fonts disabled — see Deviation #9.
+  const primaryFont = "";
+  const secondaryFont = "";
+
+  // Only bottom-sheet + image-picker remain prompt-driven.
   const envBottomSheet = readBoolEnv("EXPO_INCLUDE_BOTTOM_SHEET");
   const envImagePicker = readBoolEnv("EXPO_INCLUDE_IMAGE_PICKER");
 
   const tty = Boolean(process.stdin.isTTY);
 
-  const need =
-    envPrimary === undefined ||
-    envBottomSheet === undefined ||
-    envImagePicker === undefined ||
-    // secondary only required if primary non-empty
-    (envPrimary !== undefined && envPrimary !== "" && envSecondary === undefined);
+  const need = envBottomSheet === undefined || envImagePicker === undefined;
 
   if (need && !tty) {
     throw new Error(
-      "Missing required answers and stdin is not a TTY. Set EXPO_PRIMARY_FONT, " +
-        "EXPO_SECONDARY_FONT, EXPO_INCLUDE_BOTTOM_SHEET, EXPO_INCLUDE_IMAGE_PICKER " +
-        '(boolean values must be "0" or "1").',
+      "Missing required answers and stdin is not a TTY. Set " +
+        'EXPO_INCLUDE_BOTTOM_SHEET + EXPO_INCLUDE_IMAGE_PICKER ("0" or "1").',
     );
-  }
-
-  let primaryFont: string;
-  if (envPrimary !== undefined) {
-    primaryFont = envPrimary;
-  } else {
-    const ans = await prompts({
-      type: "text",
-      name: "primaryFont",
-      message: "Primary font name (leave empty to skip)?",
-      initial: "",
-    });
-    primaryFont = String(ans.primaryFont ?? "");
-  }
-
-  let secondaryFont: string;
-  if (primaryFont === "") {
-    // Skip secondary entirely — Phase 2 task 3 step 4.
-    secondaryFont = "";
-  } else if (envSecondary !== undefined) {
-    secondaryFont = envSecondary;
-  } else {
-    const ans = await prompts({
-      type: "text",
-      name: "secondaryFont",
-      message: "Secondary font name (leave empty to skip)?",
-      initial: "",
-    });
-    secondaryFont = String(ans.secondaryFont ?? "");
   }
 
   let bottomSheet: boolean;

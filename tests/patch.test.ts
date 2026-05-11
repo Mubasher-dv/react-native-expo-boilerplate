@@ -54,10 +54,12 @@ function readAppJson() {
 }
 
 describe("patchAppJson", () => {
-  it("sets scheme + adds expo-router plugin", () => {
+  it("sets name + slug + scheme + adds expo-router plugin", () => {
     seedAppJson([]);
     patchAppJson(tmp, "Test App", baseAnswers);
     const j = readAppJson();
+    expect(j.expo.name).toBe("Test App");
+    expect(j.expo.slug).toBe("test-app");
     expect(j.expo.scheme).toBe("test-app");
     expect(j.expo.plugins).toContain("expo-router");
   });

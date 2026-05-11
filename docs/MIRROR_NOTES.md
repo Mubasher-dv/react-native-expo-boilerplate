@@ -85,6 +85,12 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #9 — Fonts disabled (always-empty values)
+- **Reason:** User opted to ship v0.1.x without fonts wiring. Removes need for users to source `.ttf` files and lets the generated app boot immediately without missing-font warnings.
+- **Resolution:** `gatherAnswers()` hard-codes `primaryFont = ""` + `secondaryFont = ""`. Generators' empty branch produces `Fonts = {} as const` + drops all `USE_FONTS_*` sentinels (clean line-removal, no orphan blanks). `_layout.tsx` ships without `useFonts` import, hook, or guard. `expo-font` stays in `dependencies` so apps can opt in later without a CLI re-run.
+- **Env vars:** `EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` still shape-validated by `validateEnvVars` but their values are silently ignored by `gatherAnswers`. (Removing the validation would force users with leftover env vars from older CLI versions to unset them.)
+- **README + slash command:** updated to drop font prompts and reference this deviation.
+
 ### Deviation #8 — `patchBabel` writes stub when `babel.config.js` absent
 - **Reason:** SDK 54 `blank-typescript` template no longer ships `babel.config.js` — preset is loaded automatically via `expo-router`. Plan Phase 7 step 4 assumed file always present (`throw new Error("missing")`), which would kill the CLI mid-pipeline on every fresh SDK 54 scaffold.
 - **Resolution:** when file absent, `patchBabel` writes a minimal stub (`module.exports = function (api) { api.cache(true); return { presets: ['babel-preset-expo'], plugins: [] }; };`) before the AST merge runs. Subsequent runs see the file and parse normally; idempotent.
