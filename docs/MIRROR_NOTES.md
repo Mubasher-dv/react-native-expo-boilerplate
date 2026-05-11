@@ -85,6 +85,16 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #19 — Bake probe results into compiled module
+- **Reason:** v0.1.4 verification surfaced two real bugs: (a) `babel.config.js` got `react-native-worklets/plugin` injected even though `babel-preset-expo` auto-includes it (double-load risk + warnings); (b) `tsconfig.json` `baseUrl` never set → fragile path resolution.
+- **Root cause:** CLI runtime read probe data from `docs/SDK_NOTES.md` via `readSDKNotes`. That file is NOT in `package.json#files`, so it was missing from the npm tarball. `readSDKNotes` returned an empty Map → all probe-driven branches fell into wrong defaults.
+- **Resolution:** new `src/sdkProbeResults.ts` exports `SDK_PROBE_RESULTS` constants (compiled into `dist/`, always available). `index.ts` reads from constants first, with `docs/SDK_NOTES.md` as an optional override (out-of-tree dev runs only).
+- **Maintenance:** when bumping target Expo SDK, re-run `scripts/run-probes.sh` and update `SDK_PROBE_RESULTS` by hand.
+
+### Deviation #18 — Add `react-native-nitro-modules` + `expo-system-ui` to install list
+- **Reason:** `react-native-mmkv` 3.x+ was rewritten on top of Nitro Modules. Without `react-native-nitro-modules` peer, gradle fails with `Project with path ':react-native-nitro-modules' could not be found in project ':react-native-mmkv'` and CocoaPods fails with `Unable to find a specification for NitroModules depended upon by NitroMmkv`. Plus default `app.json` `userInterfaceStyle: "light"` triggers `expo prebuild` warning `Install expo-system-ui in your project`.
+- **Resolution:** both added to `buildAlwaysInstalledList`. Versions inherit from current SDK via `expo install`.
+
 ### Deviation #15 — Add `cameraPermission` to image-picker plugin
 - **Reason:** `PermissionService.ts` requests camera permission too; without `cameraPermission` in the plugin options, iOS Info.plist lacks `NSCameraUsageDescription` and the camera request crashes.
 - **Resolution:** `patchAppJsonPlugins` now sets both `photosPermission` + `cameraPermission`.

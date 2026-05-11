@@ -31,6 +31,7 @@ import { buildLayoutReplacements } from "./fonts.js";
 import { ensureLockfile, installNativeDeps } from "./install.js";
 import { log } from "./util.js";
 import { readSDKNotes } from "./sdkNotes.js";
+import { SDK_PROBE_RESULTS } from "./sdkProbeResults.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,7 +46,9 @@ function resolveTemplatesRoot(): string {
 }
 
 /**
- * Locate `docs/SDK_NOTES.md`. Same layout assumption as `resolveTemplatesRoot`.
+ * Locate `docs/SDK_NOTES.md` for OPTIONAL out-of-tree dev runs (when the CLI
+ * is invoked from its own source tree with fresh probe results). Production
+ * runs from a published tarball read from `SDK_PROBE_RESULTS` instead.
  */
 function resolveSdkNotesPath(): string {
   return path.resolve(__dirname, "..", "docs", "SDK_NOTES.md");
@@ -91,17 +94,30 @@ async function main(): Promise<void> {
   patchConstants(target.dir, templatesRoot, answers);
   patchLayout(target.dir, buildLayoutReplacements(answers));
 
-  // ---- Read SDK_NOTES.md probe outcomes ----
+  // ---- Resolve probe outcomes ----
+  // Primary: baked-in `SDK_PROBE_RESULTS` (always available; ships in dist/).
+  // Override: `docs/SDK_NOTES.md` if present in the CLI source tree (out-of-tree
+  // development scenarios where probe was just re-run against a newer SDK).
   const sdk = readSDKNotes(resolveSdkNotesPath());
-  const flagsOk = sdk.get("FLAGS_OK") === "1";
-  const probePass = sdk.get("PROBE_PASS") === "1";
+  const get = (key: string, fallback: string): string =>
+    sdk.get(key) ?? fallback;
+  const flagsOk = get("FLAGS_OK", SDK_PROBE_RESULTS.FLAGS_OK ? "1" : "0") === "1";
+  const probePass = get("PROBE_PASS", SDK_PROBE_RESULTS.PROBE_PASS ? "1" : "0") === "1";
   const workletsAutoIncluded =
-    sdk.get("BABEL_PRESET_AUTO_INCLUDES_WORKLETS") === "1";
+    get(
+      "BABEL_PRESET_AUTO_INCLUDES_WORKLETS",
+      SDK_PROBE_RESULTS.BABEL_PRESET_AUTO_INCLUDES_WORKLETS ? "1" : "0",
+    ) === "1";
   const workletsPkg =
-    sdk.get("WORKLETS_PKG") === "react-native-worklets-core"
+    get("WORKLETS_PKG", SDK_PROBE_RESULTS.WORKLETS_PKG) ===
+    "react-native-worklets-core"
       ? "react-native-worklets-core"
       : "react-native-worklets";
-  const expoBaseUrlInherited = sdk.get("EXPO_TSCONFIG_BASEURL") !== "null";
+  const baseUrlNoteRaw = get(
+    "EXPO_TSCONFIG_BASEURL",
+    SDK_PROBE_RESULTS.EXPO_TSCONFIG_BASEURL_INHERITED ? "." : "null",
+  );
+  const expoBaseUrlInherited = baseUrlNoteRaw !== "null";
 
   log.step("Patching package.json scripts + tsconfig + babel.config.js …");
   patchPackageJsonScripts(target.dir);
