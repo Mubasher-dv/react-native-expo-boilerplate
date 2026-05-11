@@ -6,6 +6,7 @@ import {
   bundleIdFor,
   bundleIdSegment,
   patchAppJson,
+  patchAppJsonAssetPaths,
   patchAppJsonPlugins,
   patchExpoRouterEntry,
   patchPackageJsonScripts,
@@ -126,6 +127,57 @@ describe("patchAppJson", () => {
     expect(j.expo.plugins).toEqual([
       ["expo-router", { origin: "https://example.com" }],
     ]);
+  });
+});
+
+describe("patchAppJsonAssetPaths", () => {
+  it("rewrites ./assets/* paths to ./src/assets/*", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({
+        expo: {
+          icon: "./assets/icon.png",
+          splash: { image: "./assets/splash-icon.png" },
+          android: {
+            adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png" },
+          },
+          web: { favicon: "./assets/favicon.png" },
+        },
+      }, null, 2),
+    );
+    
+    patchAppJsonAssetPaths(tmp);
+    const j = readAppJson();
+    expect(j.expo.icon).toBe("./src/assets/icon.png");
+    expect(j.expo.splash.image).toBe("./src/assets/splash-icon.png");
+    expect(j.expo.android.adaptiveIcon.foregroundImage).toBe(
+      "./src/assets/adaptive-icon.png",
+    );
+    expect(j.expo.web.favicon).toBe("./src/assets/favicon.png");
+  });
+
+  it("idempotent — already-patched paths stay unchanged", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({
+        expo: { icon: "./src/assets/icon.png" },
+      }),
+    );
+    
+    patchAppJsonAssetPaths(tmp);
+    expect(readAppJson().expo.icon).toBe("./src/assets/icon.png");
+  });
+
+  it("preserves user-customized paths that don't start with ./assets/", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({
+        expo: { icon: "https://cdn.example.com/icon.png" },
+      }),
+    );
+    
+    patchAppJsonAssetPaths(tmp);
+    expect(readAppJson().expo.icon).toBe("https://cdn.example.com/icon.png");
   });
 });
 

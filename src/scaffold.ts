@@ -59,3 +59,46 @@ export function cleanupBlankTemplate(target: string): void {
     }
   }
 }
+
+/**
+ * Move create-expo-app's root `assets/*.png` icons (icon, splash-icon,
+ * adaptive-icon, favicon) into `src/assets/` so the project has a single
+ * unified assets layout. Caller updates `app.json` paths separately (see
+ * `patchAppJsonAssetPaths` in patch.ts).
+ *
+ * Idempotent — if the source file is missing (already moved or never existed),
+ * skip it without erroring.
+ */
+export function moveExpoIconsIntoSrcAssets(target: string): void {
+  const rootAssets = path.join(target, "assets");
+  const srcAssets = path.join(target, "src", "assets");
+  if (!fs.existsSync(rootAssets)) return;
+  fs.mkdirSync(srcAssets, { recursive: true });
+
+  const movableFiles = [
+    "icon.png",
+    "splash-icon.png",
+    "adaptive-icon.png",
+    "favicon.png",
+  ];
+  let moved = 0;
+  for (const file of movableFiles) {
+    const from = path.join(rootAssets, file);
+    const to = path.join(srcAssets, file);
+    if (fileExists(from) && !fileExists(to)) {
+      fs.renameSync(from, to);
+      moved++;
+    }
+  }
+
+  // If root `assets/` is now empty (only icons lived there), remove it.
+  try {
+    const remaining = fs.readdirSync(rootAssets);
+    if (remaining.length === 0) fs.rmdirSync(rootAssets);
+  } catch {
+    // Not empty (user-added content) → leave alone.
+  }
+  if (moved > 0) {
+    log.step(`Moved ${moved} icon file(s) from assets/ to src/assets/.`);
+  }
+}

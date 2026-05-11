@@ -15,10 +15,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveTargetDir } from "./bootstrap.js";
 import { gatherAnswers, validateEnvVars } from "./prompts.js";
-import { cleanupBlankTemplate, runCreateExpoApp } from "./scaffold.js";
+import {
+  cleanupBlankTemplate,
+  moveExpoIconsIntoSrcAssets,
+  runCreateExpoApp,
+} from "./scaffold.js";
 import { applyBase, applyBottomSheet, applyImagePicker } from "./overlay.js";
 import {
   patchAppJson,
+  patchAppJsonAssetPaths,
   patchAppJsonPlugins,
   patchConstants,
   patchExpoRouterEntry,
@@ -64,6 +69,7 @@ async function main(): Promise<void> {
 
   await runCreateExpoApp(target.dir, target.name);
   cleanupBlankTemplate(target.dir);
+  moveExpoIconsIntoSrcAssets(target.dir);
 
   const answers = await gatherAnswers();
   log.info(
@@ -95,6 +101,7 @@ async function main(): Promise<void> {
   // ---- Patches ----
   log.step("Patching app.json + expo-router entry …");
   patchAppJson(target.dir, target.name, answers);
+  patchAppJsonAssetPaths(target.dir);
   patchExpoRouterEntry(target.dir);
   patchAppJsonPlugins(target.dir, answers);
 

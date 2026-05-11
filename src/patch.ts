@@ -64,9 +64,16 @@ type ExpoAppJson = {
     name?: string;
     slug?: string;
     scheme?: string;
-    plugins?: Array<string | [string, Record<string, unknown>]>;
+    icon?: string;
+    splash?: { image?: string; [k: string]: unknown };
+    android?: {
+      package?: string;
+      adaptiveIcon?: { foregroundImage?: string; [k: string]: unknown };
+      [k: string]: unknown;
+    };
     ios?: { bundleIdentifier?: string; [k: string]: unknown };
-    android?: { package?: string; [k: string]: unknown };
+    web?: { favicon?: string; [k: string]: unknown };
+    plugins?: Array<string | [string, Record<string, unknown>]>;
     [key: string]: unknown;
   };
 };
@@ -112,6 +119,44 @@ export function patchAppJson(
   if (!json.expo.plugins.some((e) => nameOf(e) === "expo-router")) {
     json.expo.plugins.push("expo-router");
   }
+  writeJson(p, json);
+}
+
+/**
+ * Rewrite `app.json` asset paths from create-expo-app's `./assets/<file>`
+ * defaults to `./src/assets/<file>` (Deviation #22 — unified asset layout).
+ *
+ * Pairs with `moveExpoIconsIntoSrcAssets` in scaffold.ts (which moves the
+ * actual PNG files). Idempotent: only rewrites paths that start with `./assets/`,
+ * so re-running on an already-patched app.json is a no-op.
+ */
+export function patchAppJsonAssetPaths(target: string): void {
+  const p = path.join(target, "app.json");
+  if (!fileExists(p)) return;
+  const json = readJson<ExpoAppJson>(p);
+  json.expo ??= {};
+
+  const rewrite = (value: string | undefined): string | undefined => {
+    if (!value) return value;
+    if (value.startsWith("./assets/")) {
+      return value.replace(/^\.\/assets\//, "./src/assets/");
+    }
+    return value;
+  };
+
+  if (json.expo.icon) json.expo.icon = rewrite(json.expo.icon)!;
+  if (json.expo.splash?.image) {
+    json.expo.splash.image = rewrite(json.expo.splash.image)!;
+  }
+  if (json.expo.android?.adaptiveIcon?.foregroundImage) {
+    json.expo.android.adaptiveIcon.foregroundImage = rewrite(
+      json.expo.android.adaptiveIcon.foregroundImage,
+    )!;
+  }
+  if (json.expo.web?.favicon) {
+    json.expo.web.favicon = rewrite(json.expo.web.favicon)!;
+  }
+
   writeJson(p, json);
 }
 
