@@ -12,9 +12,14 @@ import { fileExists, log } from "./util.js";
  *   target SDK). Letting create-expo-app install separately would risk
  *   dual-lockfile + version drift.
  *
- * Why `--yes`:
- *   Forces a fresh fetch of `create-expo-app@latest`; bypasses any stale global
- *   install that could ship an older template.
+ * Why `--yes` + `@latest`:
+ *   - `@latest` dist-tag: npx re-resolves against the registry every run, so
+ *     each scaffold pulls the newest `create-expo-app` (which ships the
+ *     current Expo SDK template — `blank-typescript`'s `package.json` pins
+ *     `"expo": "~<SDK>.0.0"` for the current SDK). No version pinning in
+ *     this CLI; SDK bumps come "free" via the next `create-expo-app` release.
+ *   - `--yes`: auto-accepts npx's "install X?" prompt for non-TTY contexts
+ *     (slash-command flows). Does NOT itself force freshness — `@latest` does.
  *
  * NOTE: `dir` is passed as the positional arg. create-expo-app interprets the
  *   final segment as the app name (`expo.name`); we still patch `expo.scheme`

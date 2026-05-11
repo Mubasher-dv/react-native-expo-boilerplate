@@ -16,33 +16,91 @@ For subsequent runs after the dev-client is installed, use `yarn start` (= `expo
 
 The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
 
-## Post-scaffold `add` commands
+## Post-scaffold commands (`add` / `generate` / `g`)
 
-Skipped a feature at scaffold time? Retrofit it later without re-running the full scaffolder. Run from the project root (where `app.json` lives):
+Skipped something at scaffold time? Retrofit it later without re-running the full scaffolder.
+
+> **Vocabulary:** these commands run **recipes** — packaged units of change. Two flavors today:
+> - **library recipes** install a third-party package + boilerplate (component overlay, constants splice, `app.json` plugin entry). Examples: `bottom-sheet`, `image-picker`.
+> - **asset recipes** prompt for inputs interactively and update project assets / native config. Examples: `app-icon`, `splash`.
+>
+> The word "feature" is reserved for future recipes that scaffold app modules (e.g. `auth`, `home`).
+
+### Usage
+
+1. Open a terminal **inside your scaffolded project root** (the directory containing `app.json`). The commands are cwd-scoped and refuse to run elsewhere.
+2. Run one of the three verbs below. All three are aliases of the same dispatcher — pick whichever you prefer:
+
+   ```bash
+   npx codingpixel-expo-app <verb> <recipe>
+   ```
+
+   - `<verb>` — one of `add`, `generate`, or `g` (short form).
+   - `<recipe>` — one of `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
+
+3. Rebuild afterwards so the changes land in the native projects (see each recipe below for the exact command).
+
+### Library recipes
+
+**`bottom-sheet`** — installs `@gorhom/bottom-sheet` and drops 5 components into `src/ui/appComponents/`: `customBottomSheetModal`, `appBottomSheetView`, `appBottomSheetBackdrop`, `appBottomSheetScrollView`, `BottomSheetKeyboardAwareScrollView`.
 
 ```bash
-# bottom-sheet — installs @gorhom/bottom-sheet + drops 5 components under
-# src/ui/appComponents/ (customBottomSheetModal, appBottomSheetView,
-# appBottomSheetBackdrop, appBottomSheetScrollView, BottomSheetKeyboardAwareScrollView)
 npx codingpixel-expo-app add bottom-sheet
-
-# image-picker — installs expo-image-picker, drops PermissionService at
-# src/core/services/PermissionService.ts, splices MEDIA_TYPES + IMAGE_PICKER_OPTIONS
-# + CAMERA_OPTIONS into src/core/utils/constants.ts, and adds the
-# `expo-image-picker` plugin entry to app.json with default photos/camera permission strings.
-npx codingpixel-expo-app add image-picker
+npx codingpixel-expo-app generate bottom-sheet     # same thing
+npx codingpixel-expo-app g bottom-sheet            # same thing, short form
 ```
 
-Both commands:
+Rebuild after: `yarn ios` / `yarn android` (or `npm run ios` / `npm run android`) — links the new native module into the dev-client.
 
-- Auto-detect package manager from the project's lockfile (`yarn.lock` → yarn, `package-lock.json` → npm).
-- Run `expo install <pkg> --<pm>` so the installed version matches the project's Expo SDK.
-- Are **idempotent on the patch side** — plugin entry, constants splice, and dep install skip cleanly when already applied. **File overlays overwrite** template files (same semantics as initial scaffold), so re-running `add` clobbers any edits you made to the dropped components.
+**`image-picker`** — installs `expo-image-picker`, drops `PermissionService.ts` into `src/core/services/`, splices `MEDIA_TYPES` + `IMAGE_PICKER_OPTIONS` + `CAMERA_OPTIONS` into `src/core/utils/constants.ts`, and adds the `expo-image-picker` plugin entry to `app.json` with default photos/camera permission strings.
+
+```bash
+npx codingpixel-expo-app add image-picker
+npx codingpixel-expo-app g image-picker
+```
+
+Rebuild after: `yarn ios` / `yarn android`.
+
+### Asset recipes
+
+**`app-icon`** — interactively prompts for a source PNG path + target size (default `1024`, the App Store / Play Store recommendation), copies the source to both `src/assets/icon.png` (iOS + favicon fallback) and `src/assets/adaptive-icon.png` (Android adaptive icon foreground), and updates `app.json` (`expo.icon` + `expo.android.adaptiveIcon.foregroundImage`). Also fills `expo.android.adaptiveIcon.backgroundColor` with `#ffffff` when absent (required pair — the Android adaptive icon won't render without a background). User-set `backgroundColor` is preserved.
+
+```bash
+npx codingpixel-expo-app add app-icon
+npx codingpixel-expo-app g app-icon
+```
+
+The CLI does **not** resize — Expo regenerates all platform sizes from the single source at prebuild time. The size answer is used only to validate that the source is large enough; you'll see a warning if the source is undersized or non-square. Recommended source: **1024 × 1024 square PNG**.
+
+Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from `app.json`), then `yarn ios` / `yarn android`.
+
+**`splash`** — interactively prompts for a background color (hex, default `#ffffff`) + a centered image path. Copies the source to `src/assets/splash-icon.png` and writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+
+```bash
+npx codingpixel-expo-app add splash
+npx codingpixel-expo-app g splash
+```
+
+Adjust `imageWidth` / `resizeMode` in `app.json` `plugins["expo-splash-screen"]` afterwards if the centered image renders too small or too large.
+
+Rebuild after: `npx expo prebuild --clean`, then `yarn ios` / `yarn android`.
+
+### Behavior
+
+All four recipes:
+
 - Refuse to run when `app.json` is missing — must be invoked from an Expo project root.
+- Are **idempotent on the patch side** — plugin entry, constants splice, `expo install`, and asset path writes all skip / converge cleanly when already applied. **File overlays and asset copies overwrite** the destination, so re-running clobbers any local edits to the affected files.
+- Auto-detect package manager from the project's lockfile (`yarn.lock` → yarn, `package-lock.json` → npm) and use it for the rebuild-reminder commands shown after success.
 
-After `add bottom-sheet` or `add image-picker`, rebuild the dev-client (`yarn ios` / `yarn android`) so the new native module links.
+Asset recipes (`app-icon`, `splash`) additionally:
 
-> Edge: a project literally named `add` cannot be scaffolded as `npx codingpixel-expo-app add` (collides with the subcommand). Use a different name.
+- Require a **TTY** — they prompt interactively. Running them from a piped / slash-command context throws with a clear error.
+- **Reject source filenames containing whitespace** (e.g. `app icon.png`, `app	icon.png`). Rename to `app-icon.png` and try again. Native build tooling (Xcode, Gradle, CocoaPods) is fragile around whitespace in asset filenames, so the CLI rejects up front rather than producing a broken native build later. Spaces in parent directories (e.g. `/Users/Mac User/icons/app-icon.png`) are fine — only the filename is checked.
+
+After the recipe completes, the CLI prints rebuild commands tailored to whether the change is a new native module (library recipes) or a re-bake of `ios/` + `android/` from `app.json` (asset recipes).
+
+> Edge: project names `add`, `generate`, and `g` are reserved — they collide with the subcommand dispatcher. Use a different name when scaffolding.
 
 ## Not Expo Go-compatible
 

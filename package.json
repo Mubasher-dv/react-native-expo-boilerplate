@@ -29,6 +29,14 @@
     "create-expo-app",
     "react-native"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mubasher-dv/codingpixel-expo-app.git"
+  },
+  "homepage": "https://github.com/Mubasher-dv/codingpixel-expo-app#readme",
+  "bugs": {
+    "url": "https://github.com/Mubasher-dv/codingpixel-expo-app/issues"
+  },
   "author": "",
   "license": "MIT",
   "dependencies": {

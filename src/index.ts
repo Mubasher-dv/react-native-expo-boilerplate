@@ -64,8 +64,11 @@ async function main(): Promise<void> {
   // Subcommand dispatch — MUST precede `validateEnvVars` (which is scoped to
   // the scaffold flow's env vars) and `resolveTargetDir` (which rejects an
   // existing `package.json` in cwd — the exact condition `add` requires).
+  //
+  // Verbs accepted: `add`, `generate`, `g` — all three are aliases of the
+  // same dispatcher (short forms for user ergonomics).
   const argv = process.argv.slice(2);
-  if (argv[0] === "add") {
+  if (argv[0] === "add" || argv[0] === "generate" || argv[0] === "g") {
     await runAdd(argv[1]);
     return;
   }
@@ -197,11 +200,13 @@ main().catch((err) => {
   // Mid-patch warning is scaffold-flow specific. `add` failures either
   // pre-mutation (guard) or single-file (overlay overwrite already happened
   // before the throw) — separate guidance below.
-  const isAdd = process.argv[2] === "add";
+  const verb = process.argv[2];
+  const isAdd = verb === "add" || verb === "generate" || verb === "g";
   if (isAdd) {
     log.warn(
-      "If install failed after files were overlaid, the new template files are on disk " +
-        "but the dep is missing. Re-run the same `add` command to retry the install.",
+      "Recipe failed partway: any files already copied are on disk, but the rest didn't run. " +
+        "All recipes are idempotent — re-run the same command after fixing the root cause (network, " +
+        "missing path, etc.) and it will converge.",
     );
   } else {
     log.warn(
