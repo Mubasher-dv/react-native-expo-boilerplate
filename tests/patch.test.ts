@@ -10,6 +10,7 @@ import {
   patchAppJsonPlugins,
   patchExpoRouterEntry,
   patchPackageJsonScripts,
+  patchReadme,
   patchTsconfig,
   slugify,
 } from "../src/patch.js";
@@ -339,5 +340,61 @@ describe("patchTsconfig", () => {
     });
     patchTsconfig(tmp, { expoBaseUrlInherited: false });
     expect(readTs().compilerOptions.paths["@/*"]).toEqual(["./packages/*"]);
+  });
+});
+
+describe("patchReadme", () => {
+  it("replaces `**APP_NAME**` placeholder (current template form)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "README.md"),
+      "# **APP_NAME**\n\nRun `yarn ios` in **APP_NAME**/.",
+    );
+    patchReadme(tmp, "my-cool-app");
+    const out = fs.readFileSync(path.join(tmp, "README.md"), "utf8");
+    expect(out).toContain("# my-cool-app");
+    expect(out).toContain("yarn ios` in my-cool-app/.");
+    expect(out).not.toContain("**APP_NAME**");
+  });
+
+  it("replaces legacy `__APP_NAME__` placeholder (back-compat)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "README.md"),
+      "# __APP_NAME__\n\nbody mentioning __APP_NAME__ again.",
+    );
+    patchReadme(tmp, "legacy-name");
+    const out = fs.readFileSync(path.join(tmp, "README.md"), "utf8");
+    expect(out).toContain("# legacy-name");
+    expect(out).toContain("body mentioning legacy-name again.");
+    expect(out).not.toContain("__APP_NAME__");
+  });
+
+  it("replaces both variants in a single pass if both are present", () => {
+    fs.writeFileSync(
+      path.join(tmp, "README.md"),
+      "# **APP_NAME**\nsubtitle __APP_NAME__\n",
+    );
+    patchReadme(tmp, "mixed");
+    const out = fs.readFileSync(path.join(tmp, "README.md"), "utf8");
+    expect(out).toBe("# mixed\nsubtitle mixed\n");
+  });
+
+  it("is idempotent — already-patched README (no placeholder) is a no-op", () => {
+    fs.writeFileSync(path.join(tmp, "README.md"), "# already-named\nbody.");
+    patchReadme(tmp, "other-name");
+    const out = fs.readFileSync(path.join(tmp, "README.md"), "utf8");
+    expect(out).toBe("# already-named\nbody.");
+  });
+
+  it("silently no-ops when README.md is missing", () => {
+    expect(() => patchReadme(tmp, "x")).not.toThrow();
+  });
+
+  it("handles multiple placeholder occurrences (replaceAll)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "README.md"),
+      "**APP_NAME** **APP_NAME** **APP_NAME**",
+    );
+    patchReadme(tmp, "x");
+    expect(fs.readFileSync(path.join(tmp, "README.md"), "utf8")).toBe("x x x");
   });
 });

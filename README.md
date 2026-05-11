@@ -16,7 +16,7 @@ For subsequent runs after the dev-client is installed, use `yarn start` (= `expo
 
 The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
 
-## Post-scaffold commands (`add` / `generate` / `g`)
+## Post-scaffold `add` commands
 
 Skipped something at scaffold time? Retrofit it later without re-running the full scaffolder.
 
@@ -29,14 +29,13 @@ Skipped something at scaffold time? Retrofit it later without re-running the ful
 ### Usage
 
 1. Open a terminal **inside your scaffolded project root** (the directory containing `app.json`). The commands are cwd-scoped and refuse to run elsewhere.
-2. Run one of the three verbs below. All three are aliases of the same dispatcher — pick whichever you prefer:
+2. Run:
 
    ```bash
-   npx codingpixel-expo-app <verb> <recipe>
+   npx codingpixel-expo-app add <recipe>
    ```
 
-   - `<verb>` — one of `add`, `generate`, or `g` (short form).
-   - `<recipe>` — one of `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
+   `<recipe>` is one of `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
 
 3. Rebuild afterwards so the changes land in the native projects (see each recipe below for the exact command).
 
@@ -46,8 +45,6 @@ Skipped something at scaffold time? Retrofit it later without re-running the ful
 
 ```bash
 npx codingpixel-expo-app add bottom-sheet
-npx codingpixel-expo-app generate bottom-sheet     # same thing
-npx codingpixel-expo-app g bottom-sheet            # same thing, short form
 ```
 
 Rebuild after: `yarn ios` / `yarn android` (or `npm run ios` / `npm run android`) — links the new native module into the dev-client.
@@ -56,29 +53,31 @@ Rebuild after: `yarn ios` / `yarn android` (or `npm run ios` / `npm run android`
 
 ```bash
 npx codingpixel-expo-app add image-picker
-npx codingpixel-expo-app g image-picker
 ```
 
 Rebuild after: `yarn ios` / `yarn android`.
 
 ### Asset recipes
 
-**`app-icon`** — interactively prompts for a source PNG path + target size (default `1024`, the App Store / Play Store recommendation), copies the source to both `src/assets/icon.png` (iOS + favicon fallback) and `src/assets/adaptive-icon.png` (Android adaptive icon foreground), and updates `app.json` (`expo.icon` + `expo.android.adaptiveIcon.foregroundImage`). Also fills `expo.android.adaptiveIcon.backgroundColor` with `#ffffff` when absent (required pair — the Android adaptive icon won't render without a background). User-set `backgroundColor` is preserved.
+**`app-icon`** — interactively prompts **only** for a source image path. Accepted formats: `.png`, `.jpg`, `.jpeg` (case-insensitive; anything else throws before any copy). Recommended source: **1024 × 1024 square PNG** — smaller / non-square sources still copy but log a warning. No size prompt — Expo regenerates all platform sizes from the single source at prebuild time. Copies source to both `src/assets/icon.<ext>` (iOS + Android + favicon fallback) and `src/assets/adaptive-icon.<ext>` (Android adaptive icon foreground), preserving the source extension. Cleans up sibling files in other allowed extensions (e.g. stale `icon.png` when writing `icon.jpg`). Updates `app.json` `expo.icon` and `expo.android.adaptiveIcon.foregroundImage`; also fills `expo.android.adaptiveIcon.backgroundColor` with `#ffffff` when absent (required pair — the Android adaptive icon won't render without a background). User-set `backgroundColor` is preserved.
 
 ```bash
 npx codingpixel-expo-app add app-icon
-npx codingpixel-expo-app g app-icon
 ```
 
-The CLI does **not** resize — Expo regenerates all platform sizes from the single source at prebuild time. The size answer is used only to validate that the source is large enough; you'll see a warning if the source is undersized or non-square. Recommended source: **1024 × 1024 square PNG**.
+The CLI does **not** resize — Expo regenerates all platform sizes from the single source at prebuild time. The recommended 1024 × 1024 source is enforced only as an informational warning when smaller / non-square.
 
-Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from `app.json`), then `yarn ios` / `yarn android`.
+Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from `app.json`), then `yarn ios` / `yarn android`. **If the icon doesn't update**: app icons cache aggressively on simulators / emulators — delete the app from the device first (iOS Simulator: long-press app → Remove App; Android emulator: long-press app → drag to Uninstall, or `adb uninstall <package>`), then `yarn ios` / `yarn android` again.
 
-**`splash`** — interactively prompts for a background color (hex, default `#ffffff`) + a centered image path. Copies the source to `src/assets/splash-icon.png` and writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+**`splash`** — interactively prompts for a background color (hex, default `#ffffff`) + a centered image path. Then:
+
+1. Runs `expo install expo-splash-screen` (mandatory — the plugin entry in `app.json` fails to resolve at `expo prebuild` time without the package installed; you'll see `PluginError: Failed to resolve plugin for module "expo-splash-screen"` if this step is skipped).
+2. Copies the source to `src/assets/splash-icon.png`.
+3. Writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. Merge-preserves any existing `dark` / `ios` / `android` sub-blocks. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+4. Splices `SplashScreen.preventAutoHideAsync()` (module scope) + `useEffect(() => SplashScreen.hideAsync(), [])` (inside `RootLayout`) into `src/app/_layout.tsx`. Without this, Expo auto-hides the splash the moment the JS bundle loads (before the layout mounts), and your configured splash never actually renders. Idempotent — skips on re-run, and merges `useEffect` into an existing `from "react"` import rather than adding a duplicate line.
 
 ```bash
 npx codingpixel-expo-app add splash
-npx codingpixel-expo-app g splash
 ```
 
 Adjust `imageWidth` / `resizeMode` in `app.json` `plugins["expo-splash-screen"]` afterwards if the centered image renders too small or too large.
@@ -100,7 +99,7 @@ Asset recipes (`app-icon`, `splash`) additionally:
 
 After the recipe completes, the CLI prints rebuild commands tailored to whether the change is a new native module (library recipes) or a re-bake of `ios/` + `android/` from `app.json` (asset recipes).
 
-> Edge: project names `add`, `generate`, and `g` are reserved — they collide with the subcommand dispatcher. Use a different name when scaffolding.
+> Edge: the project name `add` is reserved — it collides with the subcommand dispatcher. Use a different name when scaffolding.
 
 ## Not Expo Go-compatible
 

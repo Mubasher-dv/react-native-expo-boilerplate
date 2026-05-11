@@ -377,6 +377,35 @@ export function patchTsconfig(
   writeJson(p, ts);
 }
 
+// ---------- generated-app README ----------
+
+/**
+ * Patch the `README.md` overlaid by `applyBase` (templates/base/README.md):
+ * replaces the app-name placeholder with the resolved app name.
+ *
+ * Supports two placeholder variants so markdown autoformatters can't break
+ * the template:
+ *   - `**APP_NAME**`  — current template form (bold-asterisk syntax)
+ *   - `__APP_NAME__`  — legacy form (bold-underscore syntax). Some editors /
+ *     Prettier configs auto-rewrite `__X__` → `**X**` on save, which would
+ *     silently break the placeholder — supporting both keeps generators
+ *     functional across template revisions.
+ *
+ * Idempotent: if neither placeholder is present (already patched, or user
+ * replaced the file), this is a no-op. Safe to re-run mid-scaffold without
+ * clobbering user edits to the README body.
+ */
+export function patchReadme(target: string, name: string): void {
+  const p = path.join(target, "README.md");
+  if (!fileExists(p)) return;
+  const before = fs.readFileSync(p, "utf8");
+  const after = before
+    .replaceAll("**APP_NAME**", name)
+    .replaceAll("__APP_NAME__", name);
+  if (after === before) return;
+  fs.writeFileSync(p, after);
+}
+
 // ---------- babel.config.js (Phase 7 step 4) ----------
 // Implemented in src/babel.ts to keep AST plumbing in one file.
 

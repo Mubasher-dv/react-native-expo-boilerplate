@@ -30,6 +30,7 @@ import {
   patchExpoRouterEntry,
   patchLayout,
   patchPackageJsonScripts,
+  patchReadme,
   patchTsconfig,
 } from "./patch.js";
 import { patchBabel } from "./babel.js";
@@ -65,10 +66,10 @@ async function main(): Promise<void> {
   // the scaffold flow's env vars) and `resolveTargetDir` (which rejects an
   // existing `package.json` in cwd — the exact condition `add` requires).
   //
-  // Verbs accepted: `add`, `generate`, `g` — all three are aliases of the
-  // same dispatcher (short forms for user ergonomics).
+  // Single verb: `add`. (Earlier versions exposed `generate` + `g` aliases —
+  // dropped to keep the surface minimal; only `add` remains supported.)
   const argv = process.argv.slice(2);
-  if (argv[0] === "add" || argv[0] === "generate" || argv[0] === "g") {
+  if (argv[0] === "add") {
     await runAdd(argv[1]);
     return;
   }
@@ -127,6 +128,9 @@ async function main(): Promise<void> {
   log.step("Splicing constants + layout sentinels …");
   patchConstants(target.dir, templatesRoot, answers);
   patchLayout(target.dir, buildLayoutReplacements(answers));
+
+  log.step("Patching README.md app-name placeholder …");
+  patchReadme(target.dir, target.name);
 
   // ---- Resolve probe outcomes ----
   // Primary: baked-in `SDK_PROBE_RESULTS` (always available; ships in dist/).
@@ -200,8 +204,7 @@ main().catch((err) => {
   // Mid-patch warning is scaffold-flow specific. `add` failures either
   // pre-mutation (guard) or single-file (overlay overwrite already happened
   // before the throw) — separate guidance below.
-  const verb = process.argv[2];
-  const isAdd = verb === "add" || verb === "generate" || verb === "g";
+  const isAdd = process.argv[2] === "add";
   if (isAdd) {
     log.warn(
       "Recipe failed partway: any files already copied are on disk, but the rest didn't run. " +

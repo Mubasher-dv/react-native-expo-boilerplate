@@ -1,5 +1,5 @@
-// Post-scaffold `add` / `generate` subcommands — retrofit a **recipe** into
-// an already-scaffolded project without re-running the full scaffolder.
+// Post-scaffold `add` subcommand — retrofit a **recipe** into an
+// already-scaffolded project without re-running the full scaffolder.
 //
 // Vocabulary: this dispatcher handles **recipes** — packaged units of change.
 // A recipe is one of:
@@ -11,14 +11,11 @@
 // The word "feature" is reserved for a future namespace covering app modules
 // (`auth`, `home`, …).
 //
-// Surfaces (CLI dispatch in src/index.ts) — `add`, `generate`, `g` are
-// aliases of the same dispatcher (short forms for user ergonomics):
+// Surfaces (CLI dispatch in src/index.ts):
 //   codingpixel-expo-app add bottom-sheet
-//   codingpixel-expo-app generate bottom-sheet
-//   codingpixel-expo-app g bottom-sheet
 //   codingpixel-expo-app add image-picker
-//   codingpixel-expo-app g app-icon
-//   codingpixel-expo-app g splash
+//   codingpixel-expo-app add app-icon
+//   codingpixel-expo-app add splash
 //
 // Cwd-based: each call treats `process.cwd()` as the target project. Refuses
 // to run if `app.json` is missing (best-effort guard against running outside
@@ -102,6 +99,31 @@ function printRebuildReminder(pm: PackageManager): void {
   );
 }
 
+/**
+ * Print a uniform "Files changed:" block so the user sees exactly what the
+ * recipe touched in their project. Lockfile name is PM-aware. Lines for
+ * removed files are tagged "(removed)" so they stand out from creates/updates.
+ *
+ * Empty `written` + empty `removed` falls back to "(none)" — happens when
+ * every patch in the recipe was an idempotent no-op (e.g. re-running
+ * `add image-picker` on an already-patched project).
+ */
+function printFilesChanged(written: string[], removed: string[] = []): void {
+  log.raw("");
+  log.raw("Files changed in your project:");
+  if (written.length === 0 && removed.length === 0) {
+    log.raw("  (none — recipe was an idempotent no-op)");
+    return;
+  }
+  for (const p of written) log.raw(`  ${p}`);
+  for (const p of removed) log.raw(`  ${p}    (removed)`);
+}
+
+/** PM-correct lockfile basename for the "Files changed" list. */
+function lockfileFor(pm: PackageManager): string {
+  return pm === "yarn" ? "yarn.lock" : "package-lock.json";
+}
+
 async function expoInstall(
   target: string,
   pkg: string,
@@ -141,6 +163,17 @@ export async function addBottomSheet(target: string): Promise<void> {
   log.raw("  appBottomSheetBackdrop");
   log.raw("  appBottomSheetScrollView");
   log.raw("  BottomSheetKeyboardAwareScrollView");
+
+  printFilesChanged([
+    "src/ui/appComponents/customBottomSheetModal/index.tsx",
+    "src/ui/appComponents/appBottomSheetView/index.tsx",
+    "src/ui/appComponents/appBottomSheetBackdrop/index.tsx",
+    "src/ui/appComponents/appBottomSheetScrollView/index.tsx",
+    "src/ui/appComponents/BottomSheetKeyboardAwareScrollView/index.tsx",
+    "package.json",
+    lockfileFor(pm),
+  ]);
+
   printRebuildReminder(pm);
 }
 
@@ -247,6 +280,15 @@ export async function addImagePicker(target: string): Promise<void> {
   log.raw("");
   log.raw("Service available: @services/PermissionService");
   log.raw("Constants available: @utils/constants → MEDIA_TYPES, IMAGE_PICKER_OPTIONS, CAMERA_OPTIONS");
+
+  printFilesChanged([
+    "src/core/services/PermissionService.ts",
+    "src/core/utils/constants.ts",
+    "app.json",
+    "package.json",
+    lockfileFor(pm),
+  ]);
+
   printRebuildReminder(pm);
 }
 
@@ -351,31 +393,67 @@ function printAssetRebuildReminder(pm: PackageManager): void {
 
 // ---------- app-icon ----------
 
+/** Recommended source dimensions per App Store / Play Store guidelines. */
 const DEFAULT_ICON_SIZE = 1024;
 
 /**
- * Validation helper exposed for testing — same constraints we enforce on the
- * source PNG: must exist, must be ≥ `targetSize` on both axes, square.
- * Warnings only (we still copy), but surfaced to the user as actionable logs.
+ * Allowed icon source formats. Expo accepts PNG natively (recommended for
+ * transparency + lossless quality); JPG / JPEG are tolerated but lose
+ * transparency — we accept them per user request and preserve the extension
+ * through to the destination file.
+ */
+export const ALLOWED_ICON_EXTS = ["png", "jpg", "jpeg"] as const;
+export type IconExt = (typeof ALLOWED_ICON_EXTS)[number];
+
+/**
+ * Extract + validate the icon source extension. Returns the lower-cased
+ * extension without the leading dot. Throws when the file has no extension or
+ * an unsupported one — caller surfaces directly to the user.
+ *
+ * Case-insensitive (`.PNG` is valid).
+ */
+export function assertIconExtension(absPath: string): IconExt {
+  const raw = path.extname(absPath).toLowerCase().replace(/^\./, "");
+  if (!(ALLOWED_ICON_EXTS as readonly string[]).includes(raw)) {
+    const display = raw === "" ? "<none>" : `.${raw}`;
+    throw new Error(
+      `Unsupported icon extension: "${display}" (file: "${path.basename(absPath)}"). ` +
+        `App icons must be one of: ${ALLOWED_ICON_EXTS.map((e) => "." + e).join(", ")}.`,
+    );
+  }
+  return raw as IconExt;
+}
+
+/**
+ * Validation helper exposed for testing. PNG-header check only (JPG/JPEG
+ * sources return `null` dims — we still copy; Expo will validate the source
+ * at build time and surface an authoritative error if anything's malformed).
+ *
+ * Warnings only — never throws. Caller surfaces them as `log.warn` lines.
  */
 export function validateIconSource(
   filePath: string,
-  targetSize: number,
 ): { dims: { width: number; height: number } | null; warnings: string[] } {
-  const dims = readPngDimensions(filePath);
   const warnings: string[] = [];
-  if (!dims) {
-    warnings.push("Could not read PNG header — source may not be a valid PNG. Copying anyway.");
+  // JPG / JPEG have a different header — readPngDimensions returns null.
+  // Skip dimension warnings for those; the user picked the format consciously.
+  const isPng = path.extname(filePath).toLowerCase() === ".png";
+  const dims = isPng ? readPngDimensions(filePath) : null;
+  if (isPng && !dims) {
+    warnings.push(
+      "Source claims `.png` but the header is not a valid PNG signature. Copying anyway — Expo will surface the build-time error.",
+    );
     return { dims, warnings };
   }
+  if (!dims) return { dims, warnings };
   if (dims.width !== dims.height) {
     warnings.push(
-      `Source is non-square (${dims.width}×${dims.height}). Expo expects a square icon; result will be letterboxed or distorted.`,
+      `Source is non-square (${dims.width}×${dims.height}). Expo expects a square icon; the result will be letterboxed or distorted.`,
     );
   }
-  if (dims.width < targetSize || dims.height < targetSize) {
+  if (dims.width < DEFAULT_ICON_SIZE || dims.height < DEFAULT_ICON_SIZE) {
     warnings.push(
-      `Source (${dims.width}×${dims.height}) is smaller than requested size ${targetSize}. Stores will upscale; quality will suffer.`,
+      `Source (${dims.width}×${dims.height}) is smaller than the App Store / Play Store recommendation of ${DEFAULT_ICON_SIZE}×${DEFAULT_ICON_SIZE}. Stores will upscale; quality will suffer.`,
     );
   }
   return { dims, warnings };
@@ -388,26 +466,32 @@ const DEFAULT_ADAPTIVE_BG = "#ffffff";
  *
  * Sets per Expo SDK 54 schema (see
  * https://docs.expo.dev/versions/latest/config/app/#adaptiveicon):
- *   - `expo.icon`                                     → `./src/assets/icon.png`
- *   - `expo.android.adaptiveIcon.foregroundImage`     → `./src/assets/adaptive-icon.png`
+ *   - `expo.icon`                                     → `./src/assets/icon.<ext>`
+ *   - `expo.android.adaptiveIcon.foregroundImage`     → `./src/assets/adaptive-icon.<ext>`
  *   - `expo.android.adaptiveIcon.backgroundColor`     → `#ffffff` (only if absent —
  *     user-set value preserved; pairs with `foregroundImage`, required for the
  *     Android adaptive icon to render at all).
+ *
+ * `ext` defaults to `"png"` for back-compat; callers that copy a JPG/JPEG
+ * source pass the matching extension so the app.json path lines up with the
+ * actual file on disk.
  *
  * Does NOT touch `monochromeImage` (Android 13+ themed icons) — user can add
  * later from a transparent-background variant of the foreground.
  *
  * Idempotent: setting the same values twice yields the same file.
  */
-export function setIconConfig(target: string): void {
+export function setIconConfig(target: string, ext: IconExt = "png"): void {
+  const iconPath = `./src/assets/icon.${ext}`;
+  const adaptivePath = `./src/assets/adaptive-icon.${ext}`;
   mutateAppJson(target, (json) => {
     json.expo ??= {};
-    (json.expo as Record<string, unknown>).icon = "./src/assets/icon.png";
+    (json.expo as Record<string, unknown>).icon = iconPath;
     const expo = json.expo as Record<string, Record<string, unknown>>;
     expo.android ??= {};
     expo.android.adaptiveIcon ??= {};
     const adaptive = expo.android.adaptiveIcon as Record<string, unknown>;
-    adaptive.foregroundImage = "./src/assets/adaptive-icon.png";
+    adaptive.foregroundImage = adaptivePath;
     if (typeof adaptive.backgroundColor !== "string") {
       adaptive.backgroundColor = DEFAULT_ADAPTIVE_BG;
     }
@@ -415,14 +499,50 @@ export function setIconConfig(target: string): void {
 }
 
 /**
- * `add app-icon` recipe. Interactive — prompts for source path + target size.
- * Copies the source to `src/assets/icon.png` AND `src/assets/adaptive-icon.png`
- * (Expo expects both; the user can replace `adaptive-icon.png` later for a
- * platform-tailored foreground). Updates `app.json` paths.
+ * Remove sibling icon files with non-matching extensions, e.g. when writing
+ * `icon.jpg` we delete any pre-existing `icon.png` / `icon.jpeg` so app.json
+ * doesn't end up pointing at one file with leftovers on disk. Skips the file
+ * we're keeping. No-op when no siblings exist.
  *
- * Does NOT resize — Expo handles platform-specific resizing during prebuild
- * from the single source PNG. The `size` answer is used only to validate the
- * source is large enough; we warn on undersized input.
+ * Exported for testing.
+ */
+export function removeStaleIconSiblings(
+  assetsDir: string,
+  baseName: "icon" | "adaptive-icon",
+  keepExt: IconExt,
+): string[] {
+  const removed: string[] = [];
+  for (const e of ALLOWED_ICON_EXTS) {
+    if (e === keepExt) continue;
+    const p = path.join(assetsDir, `${baseName}.${e}`);
+    if (fileExists(p)) {
+      fs.rmSync(p);
+      removed.push(`${baseName}.${e}`);
+    }
+  }
+  return removed;
+}
+
+/**
+ * `add app-icon` recipe. Interactive — single prompt for the source path.
+ *
+ * Flow:
+ *   1. Prompt for source path.
+ *   2. Validate path exists, basename has no whitespace, extension is one of
+ *      `.png` / `.jpg` / `.jpeg`. Throw before any copy on any failure.
+ *   3. Run dimension validation (PNG-only) — warnings on non-square /
+ *      undersized; never throws.
+ *   4. Copy source to BOTH `src/assets/icon.<ext>` (iOS + Android + favicon
+ *      fallback) and `src/assets/adaptive-icon.<ext>` (Android adaptive
+ *      foreground), preserving the source extension.
+ *   5. Remove sibling files with other allowed extensions (e.g. stale
+ *      `icon.png` when writing `icon.jpg`) so app.json + disk stay in sync.
+ *   6. Write app.json icon paths matching the chosen extension.
+ *   7. Print rebuild reminder.
+ *
+ * Does NOT prompt for size and does NOT resize — Expo regenerates all
+ * platform sizes from the single source during prebuild. The 1024 px standard
+ * is documented as a soft warning only.
  */
 export async function addAppIcon(target: string): Promise<void> {
   assertExpoApp(target);
@@ -437,7 +557,8 @@ export async function addAppIcon(target: string): Promise<void> {
     {
       type: "text",
       name: "iconPath",
-      message: "Path to source icon (PNG, absolute or relative to project root)",
+      message:
+        `Path to source icon (.png / .jpg / .jpeg, absolute or relative to project root) — ${DEFAULT_ICON_SIZE}×${DEFAULT_ICON_SIZE} recommended`,
       validate: (v: string) => (v.trim() === "" ? "Required" : true),
     },
     { onCancel: () => process.exit(1) },
@@ -445,52 +566,61 @@ export async function addAppIcon(target: string): Promise<void> {
   const iconPath = String(pathAns.iconPath ?? "").trim();
   if (!iconPath) throw new Error("Aborted.");
 
-  const sizeAns = await prompts(
-    {
-      type: "number",
-      name: "size",
-      message: `Target icon size in pixels (square). Stores recommend ${DEFAULT_ICON_SIZE}`,
-      initial: DEFAULT_ICON_SIZE,
-      validate: (v: number) =>
-        Number.isInteger(v) && v >= 64 ? true : "Must be an integer ≥ 64",
-    },
-    { onCancel: () => process.exit(1) },
-  );
-  const size = Number(sizeAns.size ?? DEFAULT_ICON_SIZE);
-
+  // All up-front validation: existence, whitespace, extension. Throws before
+  // any side effect on any failure.
   const absSrc = resolveUserPath(target, iconPath);
-  const { dims, warnings } = validateIconSource(absSrc, size);
+  const ext = assertIconExtension(absSrc);
+
+  // Informational dimension check (PNG only) — warnings, never throws.
+  const { dims, warnings } = validateIconSource(absSrc);
   if (dims) log.info(`Source dimensions: ${dims.width}×${dims.height}`);
   for (const w of warnings) log.warn(w);
 
   const assetsDir = path.join(target, "src/assets");
   ensureDir(assetsDir);
-  const iconDest = path.join(assetsDir, "icon.png");
-  const adaptiveDest = path.join(assetsDir, "adaptive-icon.png");
+  const iconDest = path.join(assetsDir, `icon.${ext}`);
+  const adaptiveDest = path.join(assetsDir, `adaptive-icon.${ext}`);
   log.step(`Copying source → ${path.relative(target, iconDest)}`);
   fs.copyFileSync(absSrc, iconDest);
   log.step(`Copying source → ${path.relative(target, adaptiveDest)}`);
   fs.copyFileSync(absSrc, adaptiveDest);
 
+  // Clean up sibling files in other allowed extensions so app.json + disk
+  // don't drift apart on re-runs with a different format.
+  const removedFiles: string[] = [];
+  for (const base of ["icon", "adaptive-icon"] as const) {
+    const removed = removeStaleIconSiblings(assetsDir, base, ext);
+    for (const r of removed) {
+      log.info(`Removed stale src/assets/${r} (replaced by .${ext} variant).`);
+      removedFiles.push(`src/assets/${r}`);
+    }
+  }
+
   log.step("Updating app.json icon paths …");
-  setIconConfig(target);
+  setIconConfig(target, ext);
 
   log.success("app-icon set.");
   log.raw("");
-  log.raw("Updated:");
-  log.raw("  src/assets/icon.png             (used by iOS + Android + favicon fallback)");
-  log.raw("  src/assets/adaptive-icon.png    (Android adaptive icon foreground)");
-  log.raw("  app.json expo.icon");
-  log.raw("  app.json expo.android.adaptiveIcon.foregroundImage");
-  log.raw(`  app.json expo.android.adaptiveIcon.backgroundColor  (defaults to ${DEFAULT_ADAPTIVE_BG} if absent)`);
-  log.raw("");
-  log.info(
-    `Expo resizes the ${DEFAULT_ICON_SIZE}px source to all required platform sizes at ` +
-      "prebuild time — no manual resize needed. Replace `adaptive-icon.png` later if " +
-      "you want a different Android foreground (transparent background, padded).",
+  log.raw(
+    `Expo resizes the source to all required platform sizes at prebuild time — no manual resize needed. ` +
+      `Replace src/assets/adaptive-icon.${ext} later if you want a different Android foreground ` +
+      `(transparent background, padded).`,
   );
+
+  printFilesChanged(
+    [`src/assets/icon.${ext}`, `src/assets/adaptive-icon.${ext}`, "app.json"],
+    removedFiles,
+  );
+
   const pm = await detectProjectPm(target);
   printAssetRebuildReminder(pm);
+  log.raw("");
+  log.warn(
+    "If the icon doesn't update after rebuild: app icons cache aggressively on " +
+      "simulators / emulators. Delete the app from the device, then run `yarn ios` / " +
+      "`yarn android` again. On iOS Simulator: long-press app → Remove App. On Android " +
+      "emulator: long-press app → drag to Uninstall (or `adb uninstall <package>`).",
+  );
 }
 
 // ---------- splash ----------
@@ -544,11 +674,172 @@ export function setSplashConfig(
 }
 
 /**
+ * Splice `expo-splash-screen` wiring into `src/app/_layout.tsx`:
+ *
+ *   - `import * as SplashScreen from "expo-splash-screen";` (added after the
+ *     existing import block).
+ *   - `import { useEffect } from "react";` (added unless an existing react
+ *     import already lists `useEffect`; if a `from "react"` import exists, we
+ *     merge `useEffect` into its named imports rather than adding a duplicate
+ *     line).
+ *   - `SplashScreen.preventAutoHideAsync();` at module scope, immediately
+ *     before `export default function RootLayout(`. Required for the
+ *     `useEffect → hideAsync` pair to do anything visible — without it Expo
+ *     auto-hides the splash the moment the JS bundle finishes loading, before
+ *     the layout has mounted, making the rest of this wiring a no-op.
+ *   - `useEffect(() => { SplashScreen.hideAsync(); }, []);` as the first
+ *     statement of the `RootLayout` body, so the native splash is dismissed
+ *     once the JS-driven layout mounts.
+ *
+ * Idempotent — detects `SplashScreen.hideAsync` already present and skips.
+ *
+ * Defensive — if the file's RootLayout structure doesn't match expectations
+ * (user has heavily edited the layout), we log the snippets to paste manually
+ * rather than throw. Splash recipe shouldn't abort on a customized layout.
+ *
+ * Exported for testing.
+ */
+export function patchLayoutForSplash(target: string): void {
+  const p = path.join(target, "src/app/_layout.tsx");
+  if (!fileExists(p)) {
+    log.warn(
+      `Cannot wire splash hide-on-mount: ${p} not found — skipping splice. ` +
+        "Wire it up manually (see snippets logged at end of splash recipe).",
+    );
+    return;
+  }
+  const original = fs.readFileSync(p, "utf8");
+
+  // Idempotency guard.
+  if (original.includes("SplashScreen.hideAsync")) {
+    log.info(
+      "SplashScreen wiring already present in _layout.tsx; skipping splice.",
+    );
+    return;
+  }
+
+  // Sanity: must have a RootLayout function to splice into.
+  if (!/export\s+default\s+function\s+RootLayout\s*\(/.test(original)) {
+    log.warn(
+      "Could not locate `export default function RootLayout(` in _layout.tsx. " +
+        "Skipping automatic splice — wire up manually:",
+    );
+    log.raw('  import { useEffect } from "react";');
+    log.raw('  import * as SplashScreen from "expo-splash-screen";');
+    log.raw("  SplashScreen.preventAutoHideAsync();");
+    log.raw("  // inside RootLayout, first line:");
+    log.raw("  useEffect(() => { SplashScreen.hideAsync(); }, []);");
+    return;
+  }
+
+  let lines = original.split("\n");
+
+  // ----- Step 1: ensure `useEffect` is imported from "react" -----
+  const reactNamedRe =
+    /^\s*import\s+\{([^}]*)\}\s+from\s+["']react["']\s*;?\s*$/;
+  let useEffectImported = false;
+  let mergedIntoReactImport = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(reactNamedRe);
+    if (!m) continue;
+    if (/\buseEffect\b/.test(m[1])) {
+      useEffectImported = true;
+      break;
+    }
+    const inner = m[1].trim().replace(/,\s*$/, "");
+    const merged =
+      inner.length === 0 ? "useEffect" : `${inner}, useEffect`;
+    lines[i] = lines[i].replace(reactNamedRe, `import { ${merged} } from "react";`);
+    useEffectImported = true;
+    mergedIntoReactImport = true;
+    break;
+  }
+
+  // ----- Step 2: find end of import block; insert SplashScreen import (+ react import if not merged) -----
+  let lastImportIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
+  }
+  if (lastImportIdx === -1) {
+    log.warn("No `import` statements found in _layout.tsx — aborting splash layout splice.");
+    return;
+  }
+  const inserts: string[] = [];
+  if (!useEffectImported && !mergedIntoReactImport) {
+    inserts.push(`import { useEffect } from "react";`);
+  }
+  inserts.push(`import * as SplashScreen from "expo-splash-screen";`);
+  lines.splice(lastImportIdx + 1, 0, ...inserts);
+
+  // ----- Step 3: insert `SplashScreen.preventAutoHideAsync();` before RootLayout -----
+  let rootIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/export\s+default\s+function\s+RootLayout\s*\(/.test(lines[i])) {
+      rootIdx = i;
+      break;
+    }
+  }
+  if (rootIdx === -1) {
+    log.warn("Lost track of RootLayout after import splice — aborting splash layout splice.");
+    return;
+  }
+  // Ensure a blank line above the new module-level call for readability.
+  const moduleBlock = [
+    "// Splash recipe — keep the native splash visible until the JS layout has",
+    "// mounted, then hide it from the useEffect inside RootLayout.",
+    "SplashScreen.preventAutoHideAsync();",
+    "",
+  ];
+  // Strip a trailing blank line above rootIdx so we don't end up with two blanks.
+  if (lines[rootIdx - 1] !== undefined && lines[rootIdx - 1].trim() === "") {
+    lines.splice(rootIdx, 0, ...moduleBlock);
+  } else {
+    lines.splice(rootIdx, 0, "", ...moduleBlock);
+  }
+
+  // ----- Step 4: insert useEffect as first statement in RootLayout body -----
+  // Re-locate RootLayout.
+  rootIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/export\s+default\s+function\s+RootLayout\s*\(/.test(lines[i])) {
+      rootIdx = i;
+      break;
+    }
+  }
+  if (rootIdx === -1) {
+    log.warn("Lost track of RootLayout after module-block splice — aborting useEffect splice.");
+    return;
+  }
+  // Function opening brace is on the same line in our template. Insert right after.
+  const useEffectBlock = [
+    "  // Splash recipe — pair with SplashScreen.preventAutoHideAsync() above.",
+    "  useEffect(() => {",
+    "    SplashScreen.hideAsync();",
+    "  }, []);",
+    "",
+  ];
+  lines.splice(rootIdx + 1, 0, ...useEffectBlock);
+
+  fs.writeFileSync(p, lines.join("\n"));
+}
+
+/**
  * `add splash` recipe. Interactive — prompts for background color (hex) +
- * source image path. Copies the source to `src/assets/splash-icon.png` and
- * writes the `expo-splash-screen` plugin entry to `app.json` with
- * `resizeMode: "contain"` + `imageWidth: 200` (image centered, scaled to fit
- * within 200px on the smaller axis; full surrounding area filled with color).
+ * source image path. Then:
+ *
+ *   1. `expo install expo-splash-screen` — MANDATORY. The `expo-splash-screen`
+ *      config plugin entry in app.json fails to resolve at `expo prebuild` /
+ *      `expo run:*` time if the package isn't installed, with
+ *      `PluginError: Failed to resolve plugin for module "expo-splash-screen"`.
+ *      Initial scaffold doesn't include this package, so this recipe brings it
+ *      in lazily.
+ *   2. Copy source → `src/assets/splash-icon.png`.
+ *   3. Write `expo-splash-screen` plugin entry to app.json.
+ *   4. Splice `SplashScreen.preventAutoHideAsync()` + `useEffect → hideAsync`
+ *      into `src/app/_layout.tsx` so the splash actually dismisses on mount
+ *      (without this the JS bundle's auto-hide fires too early and the
+ *      configured splash never gets a chance to render).
+ *   5. Print rebuild reminder.
  */
 export async function addSplash(target: string): Promise<void> {
   assertExpoApp(target);
@@ -558,6 +849,9 @@ export async function addSplash(target: string): Promise<void> {
         "not a piped or slash-command context.",
     );
   }
+
+  const pm = await detectProjectPm(target);
+  log.info(`Package manager: ${pm}`);
 
   const colorAns = await prompts(
     {
@@ -592,6 +886,12 @@ export async function addSplash(target: string): Promise<void> {
   const dims = readPngDimensions(absSrc);
   if (dims) log.info(`Splash image dimensions: ${dims.width}×${dims.height}`);
 
+  // Install BEFORE we mutate app.json so that on install failure the user is
+  // left with a working app.json (no orphaned plugin entry pointing at a
+  // missing package).
+  log.step("Installing expo-splash-screen via expo install …");
+  await expoInstall(target, "expo-splash-screen", pm);
+
   const assetsDir = path.join(target, "src/assets");
   ensureDir(assetsDir);
   const splashDest = path.join(assetsDir, "splash-icon.png");
@@ -600,6 +900,9 @@ export async function addSplash(target: string): Promise<void> {
 
   log.step("Writing expo-splash-screen plugin entry to app.json …");
   setSplashConfig(target, color, "./src/assets/splash-icon.png");
+
+  log.step("Wiring SplashScreen.hideAsync() into src/app/_layout.tsx …");
+  patchLayoutForSplash(target);
 
   log.success("splash set.");
   log.raw("");
@@ -611,8 +914,23 @@ export async function addSplash(target: string): Promise<void> {
     'Adjust `imageWidth` / `resizeMode` in app.json plugins["expo-splash-screen"] ' +
       "if the centered image renders too small or too large.",
   );
-  const pm = await detectProjectPm(target);
+
+  printFilesChanged([
+    "src/assets/splash-icon.png",
+    "app.json",
+    "src/app/_layout.tsx",
+    "package.json",
+    lockfileFor(pm),
+  ]);
+
   printAssetRebuildReminder(pm);
+  log.raw("");
+  log.warn(
+    "If the splash doesn't update after rebuild: native splash assets cache " +
+      "aggressively. Delete the app from the simulator / emulator first (iOS: " +
+      "long-press → Remove App; Android: long-press → Uninstall, or " +
+      "`adb uninstall <package>`), then `yarn ios` / `yarn android` again.",
+  );
 }
 
 // ---------- dispatcher ----------
@@ -628,7 +946,7 @@ type Recipe = (typeof KNOWN_RECIPES)[number];
 export async function runAdd(recipe: string | undefined): Promise<void> {
   if (!recipe) {
     throw new Error(
-      `Missing recipe. Usage: codingpixel-expo-app <add|generate|g> <${KNOWN_RECIPES.join("|")}>`,
+      `Missing recipe. Usage: codingpixel-expo-app add <${KNOWN_RECIPES.join("|")}>`,
     );
   }
   if (!(KNOWN_RECIPES as readonly string[]).includes(recipe)) {

@@ -3,9 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  assertIconExtension,
   assertSafeAssetFilename,
   ensureImagePickerPlugin,
+  patchLayoutForSplash,
   readPngDimensions,
+  removeStaleIconSiblings,
   setIconConfig,
   setSplashConfig,
   spliceMediaConstants,
@@ -189,41 +192,182 @@ describe("readPngDimensions", () => {
 // ---------- validateIconSource ----------
 
 describe("validateIconSource", () => {
-  it("returns no warnings for a square PNG ≥ target size", () => {
+  it("returns no warnings for a square PNG ≥ 1024", () => {
     const p = path.join(tmp, "ok.png");
     fs.writeFileSync(p, makePngHeader(1024, 1024));
-    const { dims, warnings } = validateIconSource(p, 1024);
+    const { dims, warnings } = validateIconSource(p);
     expect(dims).toEqual({ width: 1024, height: 1024 });
     expect(warnings).toEqual([]);
   });
 
-  it("warns when source is non-square", () => {
+  it("warns when PNG source is non-square", () => {
     const p = path.join(tmp, "wide.png");
     fs.writeFileSync(p, makePngHeader(1024, 512));
-    const { warnings } = validateIconSource(p, 1024);
+    const { warnings } = validateIconSource(p);
     expect(warnings.some((w) => /non-square/i.test(w))).toBe(true);
   });
 
-  it("warns when source is smaller than target size", () => {
+  it("warns when PNG source is smaller than 1024", () => {
     const p = path.join(tmp, "small.png");
     fs.writeFileSync(p, makePngHeader(512, 512));
-    const { warnings } = validateIconSource(p, 1024);
-    expect(warnings.some((w) => /smaller than requested size/i.test(w))).toBe(true);
+    const { warnings } = validateIconSource(p);
+    expect(warnings.some((w) => /smaller than/i.test(w))).toBe(true);
   });
 
-  it("warns when file is not a valid PNG (header unreadable)", () => {
+  it("warns when file claims .png but has invalid header", () => {
     const p = path.join(tmp, "notpng.png");
     fs.writeFileSync(p, Buffer.alloc(24, 0));
-    const { dims, warnings } = validateIconSource(p, 1024);
+    const { dims, warnings } = validateIconSource(p);
     expect(dims).toBeNull();
-    expect(warnings.some((w) => /PNG header/i.test(w))).toBe(true);
+    expect(warnings.some((w) => /PNG signature/i.test(w))).toBe(true);
+  });
+
+  it("skips dimension checks for non-PNG extensions (.jpg / .jpeg)", () => {
+    const p = path.join(tmp, "icon.jpg");
+    fs.writeFileSync(p, Buffer.from([0xff, 0xd8, 0xff, 0xe0])); // JPEG SOI
+    const { dims, warnings } = validateIconSource(p);
+    expect(dims).toBeNull();
+    expect(warnings).toEqual([]);
+  });
+});
+
+// ---------- assertIconExtension ----------
+
+describe("assertIconExtension", () => {
+  it("accepts .png (case-insensitive)", () => {
+    expect(assertIconExtension("/a/icon.png")).toBe("png");
+    expect(assertIconExtension("/a/icon.PNG")).toBe("png");
+  });
+
+  it("accepts .jpg + .jpeg", () => {
+    expect(assertIconExtension("/a/icon.jpg")).toBe("jpg");
+    expect(assertIconExtension("/a/icon.JPG")).toBe("jpg");
+    expect(assertIconExtension("/a/icon.jpeg")).toBe("jpeg");
+    expect(assertIconExtension("/a/icon.JPEG")).toBe("jpeg");
+  });
+
+  it("throws on unsupported extension (.webp, .svg, .gif, .bmp)", () => {
+    expect(() => assertIconExtension("/a/icon.webp")).toThrow(/Unsupported/i);
+    expect(() => assertIconExtension("/a/icon.svg")).toThrow(/Unsupported/i);
+    expect(() => assertIconExtension("/a/icon.gif")).toThrow(/Unsupported/i);
+    expect(() => assertIconExtension("/a/icon.bmp")).toThrow(/Unsupported/i);
+  });
+
+  it("throws on no extension", () => {
+    expect(() => assertIconExtension("/a/icon")).toThrow(/Unsupported/i);
+  });
+
+  it("error message names the file + lists supported formats", () => {
+    try {
+      assertIconExtension("/a/logo.webp");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      expect(msg).toContain("logo.webp");
+      expect(msg).toContain(".png");
+      expect(msg).toContain(".jpg");
+      expect(msg).toContain(".jpeg");
+    }
+  });
+});
+
+// ---------- patchLayoutForSplash ----------
+
+function writeLayout(content: string): void {
+  const dir = path.join(tmp, "src/app");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "_layout.tsx"), content);
+}
+
+function readLayout(): string {
+  return fs.readFileSync(path.join(tmp, "src/app/_layout.tsx"), "utf8");
+}
+
+// Minimal subset of base template, mirroring scaffold output (sentinels
+// already filled / dropped by patchLayout at scaffold time).
+const BASE_LAYOUT = `import { ErrorBoundary } from "react-error-boundary";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Routes from "./routes";
+
+export default function RootLayout() {
+  return (
+    <ErrorBoundary FallbackComponent={() => null}>
+      <Routes />
+    </ErrorBoundary>
+  );
+}
+`;
+
+describe("patchLayoutForSplash", () => {
+  it("adds SplashScreen import + react useEffect import + preventAutoHideAsync + useEffect→hideAsync", () => {
+    writeLayout(BASE_LAYOUT);
+    patchLayoutForSplash(tmp);
+    const out = readLayout();
+    expect(out).toContain('import * as SplashScreen from "expo-splash-screen";');
+    expect(out).toContain('import { useEffect } from "react";');
+    expect(out).toContain("SplashScreen.preventAutoHideAsync();");
+    // useEffect must appear inside RootLayout, before the JSX return.
+    const rootIdx = out.indexOf("export default function RootLayout()");
+    const useEffectIdx = out.indexOf("SplashScreen.hideAsync()");
+    const returnIdx = out.indexOf("return (", rootIdx);
+    expect(useEffectIdx).toBeGreaterThan(rootIdx);
+    expect(useEffectIdx).toBeLessThan(returnIdx);
+  });
+
+  it("merges useEffect into an existing `from \"react\"` named import (no duplicate line)", () => {
+    writeLayout(`import { useState } from "react";\n${BASE_LAYOUT}`);
+    patchLayoutForSplash(tmp);
+    const out = readLayout();
+    // Single react import line — useState + useEffect merged.
+    const reactImportMatches = out.match(/from\s+["']react["']/g) ?? [];
+    expect(reactImportMatches).toHaveLength(1);
+    expect(out).toMatch(/import\s+\{[^}]*useState[^}]*useEffect[^}]*\}\s+from\s+["']react["']/);
+  });
+
+  it("does NOT add a duplicate useEffect import when react already imports it", () => {
+    writeLayout(`import { useEffect, useState } from "react";\n${BASE_LAYOUT}`);
+    patchLayoutForSplash(tmp);
+    const out = readLayout();
+    const reactImportMatches = out.match(/from\s+["']react["']/g) ?? [];
+    expect(reactImportMatches).toHaveLength(1);
+    // The original `useEffect, useState` order is preserved unchanged.
+    expect(out).toMatch(/import\s+\{\s*useEffect,\s*useState\s*\}\s+from\s+["']react["']/);
+  });
+
+  it("is idempotent — second call yields identical output", () => {
+    writeLayout(BASE_LAYOUT);
+    patchLayoutForSplash(tmp);
+    const first = readLayout();
+    patchLayoutForSplash(tmp);
+    const second = readLayout();
+    expect(second).toBe(first);
+  });
+
+  it("silently skips when _layout.tsx is missing (logs warn, does not throw)", () => {
+    expect(() => patchLayoutForSplash(tmp)).not.toThrow();
+  });
+
+  it("skips when layout has no RootLayout function (defensive fallback)", () => {
+    writeLayout(`// custom layout — no RootLayout function\nexport const Foo = () => null;\n`);
+    patchLayoutForSplash(tmp);
+    const out = readLayout();
+    expect(out).not.toContain("SplashScreen.hideAsync");
+  });
+
+  it("preserves existing imports + body when splicing", () => {
+    writeLayout(BASE_LAYOUT);
+    patchLayoutForSplash(tmp);
+    const out = readLayout();
+    expect(out).toContain('import { ErrorBoundary } from "react-error-boundary";');
+    expect(out).toContain('import { GestureHandlerRootView } from "react-native-gesture-handler";');
+    expect(out).toContain('import Routes from "./routes";');
+    expect(out).toContain("<Routes />");
   });
 });
 
 // ---------- setIconConfig ----------
 
 describe("setIconConfig", () => {
-  it("sets expo.icon + adaptiveIcon.foregroundImage + default adaptiveIcon.backgroundColor", () => {
+  it("defaults to .png paths when no ext given", () => {
     writeAppJson([]);
     setIconConfig(tmp);
     const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
@@ -231,8 +375,27 @@ describe("setIconConfig", () => {
     expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
       "./src/assets/adaptive-icon.png",
     );
-    // Required pair for adaptive icon to render at all on Android — default fill.
     expect(json.expo.android.adaptiveIcon.backgroundColor).toBe("#ffffff");
+  });
+
+  it("writes .jpg paths when ext = 'jpg'", () => {
+    writeAppJson([]);
+    setIconConfig(tmp, "jpg");
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    expect(json.expo.icon).toBe("./src/assets/icon.jpg");
+    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
+      "./src/assets/adaptive-icon.jpg",
+    );
+  });
+
+  it("writes .jpeg paths when ext = 'jpeg'", () => {
+    writeAppJson([]);
+    setIconConfig(tmp, "jpeg");
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    expect(json.expo.icon).toBe("./src/assets/icon.jpeg");
+    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
+      "./src/assets/adaptive-icon.jpeg",
+    );
   });
 
   it("preserves user-set adaptiveIcon.backgroundColor (does NOT overwrite)", () => {
@@ -379,6 +542,35 @@ describe("setSplashConfig", () => {
     );
     expect(splashEntries).toHaveLength(1);
     expect(splashEntries[0][1].backgroundColor).toBe("#000000");
+  });
+});
+
+// ---------- removeStaleIconSiblings ----------
+
+describe("removeStaleIconSiblings", () => {
+  it("removes icon.jpg + icon.jpeg when keeping .png", () => {
+    fs.writeFileSync(path.join(tmp, "icon.png"), "P");
+    fs.writeFileSync(path.join(tmp, "icon.jpg"), "J");
+    fs.writeFileSync(path.join(tmp, "icon.jpeg"), "JJ");
+    const removed = removeStaleIconSiblings(tmp, "icon", "png");
+    expect(removed.sort()).toEqual(["icon.jpeg", "icon.jpg"]);
+    expect(fs.existsSync(path.join(tmp, "icon.png"))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "icon.jpg"))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, "icon.jpeg"))).toBe(false);
+  });
+
+  it("no-op when no siblings exist", () => {
+    fs.writeFileSync(path.join(tmp, "icon.png"), "P");
+    const removed = removeStaleIconSiblings(tmp, "icon", "png");
+    expect(removed).toEqual([]);
+  });
+
+  it("works on adaptive-icon as well", () => {
+    fs.writeFileSync(path.join(tmp, "adaptive-icon.png"), "P");
+    fs.writeFileSync(path.join(tmp, "adaptive-icon.jpg"), "J");
+    const removed = removeStaleIconSiblings(tmp, "adaptive-icon", "jpg");
+    expect(removed).toEqual(["adaptive-icon.png"]);
+    expect(fs.existsSync(path.join(tmp, "adaptive-icon.jpg"))).toBe(true);
   });
 });
 
