@@ -85,6 +85,15 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #21 — `cleanupBlankTemplate` also removes root `index.ts`
+- **Reason:** `npx tsc --noEmit` on generated app errored with `index.ts(3,17): Cannot find module './App'`. blank-typescript ships both `App.tsx` (root component) AND `index.ts` (calls `registerRootComponent(App)`). We delete `App.tsx` (collides with expo-router) but the dangling `import './App'` in `index.ts` then fails type-check. The file is unused at runtime since `package.json#main = expo-router/entry`, but TypeScript still type-checks it.
+- **Resolution:** `cleanupBlankTemplate` now removes both files.
+
+### Deviation #20 — Revert `mmkvStorage.ts` to `createMMKV()` factory (mmkv 4.x API)
+- **Reason:** Earlier Deviation #16 "fixed" MyRoster's `createMMKV()` → `new MMKV()` based on incorrect assumption about API direction. `react-native-mmkv` 3.x → 4.x actually REVERTED to the factory pattern: `createMMKV(config?)` is the runtime export; `MMKV` is exported as a TYPE only (`export type { MMKV }`). `npx tsc --noEmit` surfaced the mistake: `'MMKV' only refers to a type, but is being used as a value`.
+- **Resolution:** `mmkvStorage.ts` reverted to MyRoster's original `import { createMMKV }` + `const storage = createMMKV()` + `storage.remove(key)` (4.x retains `remove`, not `delete`).
+- **Lesson:** verify peer-package APIs against the SHIPPED `node_modules/.../*.d.ts` of the actual SDK 54 install before "fixing" mirrored code.
+
 ### Deviation #19 — Bake probe results into compiled module
 - **Reason:** v0.1.4 verification surfaced two real bugs: (a) `babel.config.js` got `react-native-worklets/plugin` injected even though `babel-preset-expo` auto-includes it (double-load risk + warnings); (b) `tsconfig.json` `baseUrl` never set → fragile path resolution.
 - **Root cause:** CLI runtime read probe data from `docs/SDK_NOTES.md` via `readSDKNotes`. That file is NOT in `package.json#files`, so it was missing from the npm tarball. `readSDKNotes` returned an empty Map → all probe-driven branches fell into wrong defaults.

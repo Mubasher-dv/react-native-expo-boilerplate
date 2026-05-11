@@ -37,13 +37,25 @@ export async function runCreateExpoApp(dir: string, _name: string): Promise<void
 }
 
 /**
- * Delete `App.tsx` shipped by blank-typescript — collides with expo-router's
- * auto-detection of `src/app/`. Idempotent (no-op if already absent).
+ * Delete blank-typescript leftovers that conflict with our expo-router setup:
+ *
+ *   - `App.tsx` — root component for non-expo-router apps; collides with
+ *     expo-router's auto-detection of `src/app/`.
+ *   - `index.ts` — root entry shipped by blank-typescript: imports `./App`
+ *     and calls `registerRootComponent`. We set `package.json#main` to
+ *     `expo-router/entry` so this file is unused at runtime, but TypeScript
+ *     still type-checks it and errors with `Cannot find module './App'`
+ *     after we delete the file above.
+ *
+ * Idempotent (no-op if already absent).
  */
 export function cleanupBlankTemplate(target: string): void {
-  const appTsx = path.join(target, "App.tsx");
-  if (fileExists(appTsx)) {
-    fs.rmSync(appTsx);
-    log.step("Removed blank-typescript App.tsx (replaced by expo-router src/app/).");
+  const removable = ["App.tsx", "index.ts"];
+  for (const rel of removable) {
+    const p = path.join(target, rel);
+    if (fileExists(p)) {
+      fs.rmSync(p);
+      log.step(`Removed blank-typescript ${rel} (replaced by expo-router src/app/).`);
+    }
   }
 }

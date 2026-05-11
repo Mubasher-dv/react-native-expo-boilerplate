@@ -1,8 +1,8 @@
-// react-native-mmkv 3.x+ exports `MMKV` as a class (was `createMMKV()` factory
-// in older versions). MyRoster's source predates the API change.
-import { MMKV } from "react-native-mmkv";
+// react-native-mmkv 4.x exports `createMMKV()` factory + `MMKV` as a TYPE only.
+// (Earlier 3.x exported `MMKV` as a class; the API was reverted in 4.x.)
+import { createMMKV } from "react-native-mmkv";
 
-const storage = new MMKV();
+const storage = createMMKV();
 
 export const reduxStorage = {
   setItem: (key: string, value: string) => {
@@ -14,7 +14,7 @@ export const reduxStorage = {
     return Promise.resolve(value);
   },
   removeItem: (key: string) => {
-    storage.delete(key);
+    storage.remove(key);
     return Promise.resolve();
   },
 };
