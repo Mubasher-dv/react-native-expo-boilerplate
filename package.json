@@ -1,5 +1,5 @@
 {
-  "name": "@codingpixel/create-expo-app",
+  "name": "codingpixel-expo-app",
   "version": "0.1.0",
   "description": "Opinionated Expo app scaffolder mirroring MyRoster conventions.",
   "type": "module",

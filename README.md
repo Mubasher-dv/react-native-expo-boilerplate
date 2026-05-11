@@ -1,17 +1,17 @@
-# `@codingpixel/create-expo-app`
+# `codingpixel-expo-app`
 
 Opinionated Expo SDK 54+ app scaffolder. Mirrors the [MyRoster](https://github.com/) project's component / redux / theme conventions; layers them on top of `create-expo-app`'s `blank-typescript` template; runs all native-dep installs through `expo install` so versions match the target SDK; ships a single lockfile (yarn OR npm — never both).
 
 ## Quickstart
 
 ```bash
-npx @codingpixel/create-expo-app my-app
+npx codingpixel-expo-app my-app
 cd my-app
 npx expo prebuild
 yarn ios       # or: npm run ios / yarn android / npm run android
 ```
 
-The bin name is `codingpixel-expo` (used after global install). Invoke through `npx @codingpixel/create-expo-app` (the package name) for one-shot runs.
+The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
 
 ## Not Expo Go-compatible
 
@@ -73,11 +73,11 @@ Required when stdin is not a TTY (e.g. slash-command flows).
 
 `EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` are silently ignored (fonts disabled — see "Fonts" above).
 
-## Bin name + scope
+## Bin name
 
-- npm package: `@codingpixel/create-expo-app` (scoped, public).
+- npm package: `codingpixel-expo-app` (unscoped, public).
 - Bin: `codingpixel-expo`.
-- Run as `npx @codingpixel/create-expo-app <dir>` (the package name) — `npx codingpixel-expo` only resolves after a `yarn global add` / `npm i -g` of this package.
+- Run as `npx codingpixel-expo-app <dir>` (the package name) — `npx codingpixel-expo` only resolves after a `yarn global add` / `npm i -g` of this package.
 
 ## Recovery from mid-run failures
 
@@ -102,10 +102,10 @@ yarn audit:templates    # also runs as prepublishOnly
 Publish:
 
 ```bash
-npm publish --access public
+npm publish
 ```
 
-(Scoped packages default to private; `--access public` is required for the npm registry.)
+(Unscoped packages publish public by default — no `--access` flag needed.)
 
 ## License
 
