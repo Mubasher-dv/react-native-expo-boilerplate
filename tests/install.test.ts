@@ -46,6 +46,8 @@ describe("buildAlwaysInstalledList", () => {
     expect(list).toContain("expo-linear-gradient"); // Deviation #2
     expect(list).toContain("react-native-logs"); // Deviation #3
     expect(list).toContain("babel-plugin-module-resolver"); // Deviation #7
+    expect(list).toContain("expo-linking"); // Deviation #11
+    expect(list).toContain("expo-constants"); // Deviation #11
   });
 });
 

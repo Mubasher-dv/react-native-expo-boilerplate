@@ -42,6 +42,11 @@ export function buildAlwaysInstalledList(workletsPkg: string): string[] {
     // Deviation #7 — Phase 7 patchBabel injects ["module-resolver", { alias }];
     // Metro fails on first bundle if the plugin pkg isn't installed.
     "babel-plugin-module-resolver",
+    // Deviation #11 — expo-router peer deps that `expo install expo-router`
+    // does NOT auto-install (Metro fails at bundle time with "Unable to
+    // resolve 'expo-linking' from .../expo-router/build/views/Unmatched.js").
+    "expo-linking",
+    "expo-constants",
   ];
 }
 

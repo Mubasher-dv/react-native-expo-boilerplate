@@ -1,3 +1,14 @@
-// Generated at scaffold time by `patchLayout` (Phase 6) based on the user's
-// EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT answers.
-// @@FONTS_OBJECT@@
+// Empty font registry — drop matching .ttf files into `assets/fonts/` and
+// fill the enum values with PostScript names (e.g. `BOLD = "Inter-Bold"`).
+// Wire `useFonts(...)` in `src/app/_layout.tsx` to actually load them.
+export const enum Fonts {
+  BOLD = "",
+  EXTRA_BOLD = "",
+  EXTRA_LIGHT = "",
+  MEDIUM = "",
+  REGULAR = "",
+  SEMI_BOLD = "",
+  ITALIC = "",
+  LIGHT = "",
+  THIN = "",
+}

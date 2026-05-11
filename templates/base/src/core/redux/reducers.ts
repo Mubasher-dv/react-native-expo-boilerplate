@@ -2,7 +2,7 @@ import { combineReducers } from "@reduxjs/toolkit";
 import { persistReducer } from "redux-persist";
 
 import { reduxStorage } from "./mmkvStorage";
-import { userReducer } from "./slices/userSlice";
+import userReducer from "./slices/userSlice";
 
 export const rootReducer = combineReducers({
   user: userReducer,

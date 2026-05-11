@@ -152,22 +152,21 @@ export function patchConstants(
   fs.writeFileSync(p, out);
 }
 
-// ---------- layout + fonts splice (Phase 6 step 4) ----------
+// ---------- layout splice (Phase 6 step 4) ----------
+// Deviation #10: `fonts.ts` ships as a static enum file (no FONTS_OBJECT
+// sentinel), so this only touches `_layout.tsx`.
 
 export function patchLayout(
   target: string,
   replacements: SentinelReplacements,
 ): void {
   const layoutPath = path.join(target, "src/app/_layout.tsx");
-  const fontsPath = path.join(target, "src/ui/theme/fonts.ts");
-  for (const p of [layoutPath, fontsPath]) {
-    if (!fileExists(p)) {
-      throw new Error(`patchLayout: ${p} missing — was applyBase run first?`);
-    }
-    const before = fs.readFileSync(p, "utf8");
-    const after = applySentinels(before, replacements, p);
-    fs.writeFileSync(p, after);
+  if (!fileExists(layoutPath)) {
+    throw new Error(`patchLayout: ${layoutPath} missing — was applyBase run first?`);
   }
+  const before = fs.readFileSync(layoutPath, "utf8");
+  const after = applySentinels(before, replacements, layoutPath);
+  fs.writeFileSync(layoutPath, after);
 }
 
 // ---------- package.json scripts (Phase 7 step 1) ----------

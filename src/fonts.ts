@@ -97,7 +97,9 @@ export function generateBottomSheetProviderBlocks(
 
 /**
  * Convenience: build the full sentinel-replacement map for `patchLayout`.
- * Includes both layout sentinels and the fonts.ts sentinel.
+ * Note: `fonts.ts` ships as a static enum file (Deviation #10) — no
+ * `FONTS_OBJECT` sentinel is patched. The 6 `_layout.tsx` sentinels still get
+ * filled (or empty-dropped per `gatherAnswers`).
  */
 export function buildLayoutReplacements(answers: Answers): Record<string, string> {
   const fonts = generateUseFontsBlocks(answers.primaryFont, answers.secondaryFont);
@@ -109,6 +111,5 @@ export function buildLayoutReplacements(answers: Answers): Record<string, string
     BOTTOM_SHEET_PROVIDER_IMPORT: bs.importBlock,
     BOTTOM_SHEET_PROVIDER_OPEN: bs.openBlock,
     BOTTOM_SHEET_PROVIDER_CLOSE: bs.closeBlock,
-    FONTS_OBJECT: generateFontsObject(answers.primaryFont, answers.secondaryFont),
   };
 }

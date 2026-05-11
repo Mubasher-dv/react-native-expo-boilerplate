@@ -112,10 +112,8 @@ beforeEach(() => {
     ].join("\n"),
   );
 
-  fs.writeFileSync(
-    path.join(target, "src/ui/theme/fonts.ts"),
-    "// header\n// @@FONTS_OBJECT@@\n",
-  );
+  // Deviation #10: fonts.ts ships static (no FONTS_OBJECT sentinel).
+  // patchLayout no longer touches it; only _layout.tsx is patched.
 });
 
 afterEach(() => {
@@ -137,15 +135,9 @@ describe("patchLayout end-to-end", () => {
       path.join(target, "src/app/_layout.tsx"),
       "utf8",
     );
-    const fonts = fs.readFileSync(
-      path.join(target, "src/ui/theme/fonts.ts"),
-      "utf8",
-    );
     expect(layout).not.toMatch(/@@[A-Z_]+@@/);
-    expect(fonts).not.toMatch(/@@[A-Z_]+@@/);
-    // Bottom-sheet provider should be gone, not present as opening tag.
     expect(layout).not.toContain("BottomSheetModalProvider");
-    expect(fonts).toMatch(/Fonts = \{\s*\} as const;/);
+    expect(layout).not.toContain("useFonts");
   });
 
   it("primary font + bottom-sheet → injected blocks present, zero residue", () => {
@@ -162,16 +154,10 @@ describe("patchLayout end-to-end", () => {
       path.join(target, "src/app/_layout.tsx"),
       "utf8",
     );
-    const fonts = fs.readFileSync(
-      path.join(target, "src/ui/theme/fonts.ts"),
-      "utf8",
-    );
     expect(layout).not.toMatch(/@@[A-Z_]+@@/);
-    expect(fonts).not.toMatch(/@@[A-Z_]+@@/);
     expect(layout).toContain("useFonts");
     expect(layout).toContain("if (!loaded) return null;");
     expect(layout).toContain("<BottomSheetModalProvider>");
     expect(layout).toContain("</BottomSheetModalProvider>");
-    expect(fonts).toContain('SECONDARY_BOLD: "Roboto-Bold"');
   });
 });

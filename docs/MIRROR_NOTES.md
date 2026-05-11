@@ -85,6 +85,19 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #11 — Add `expo-linking` + `expo-constants` to install list
+- **Reason:** `expo-router` requires both as peer deps but `expo install expo-router` does NOT auto-install them. First Metro bundle in the generated app fails with `Unable to resolve "expo-linking" from .../expo-router/build/views/Unmatched.js`. Same risk for `expo-constants` (used by other expo-router internals).
+- **Resolution:** added both to `buildAlwaysInstalledList`. Versions inherit from current SDK via `expo install`.
+
+### Deviation #10 — Static `fonts.ts`, `enum`-style `Colors` + `Fonts` (per user request)
+- **Reason:** User opted for `const enum Fonts { BOLD = "", ... }` (9 keys empty) over Plan v5's "object literal `as const` + FontKey" pattern. Same direction for `Colors`. Files now ship STATIC at scaffold time (no per-answer generation, no sentinel splice for fonts.ts).
+- **Resolution:**
+  - `templates/base/src/ui/theme/fonts.ts` — static `const enum` with 9 weights, all empty values. Apps fill PostScript names + drop matching `.ttf` into `assets/fonts/`.
+  - `src/fonts.ts::buildLayoutReplacements` no longer emits `FONTS_OBJECT` key.
+  - `src/patch.ts::patchLayout` no longer touches `fonts.ts` (only `_layout.tsx` sentinels).
+  - `scripts/audit-templates.sh` Fonts-type-position grep removed (`enum Fonts` makes `: Fonts`, `keyof typeof Fonts`, etc. legitimate type-position uses).
+- **Babel safety caveat:** Plan v5's original ban on TS `enum` was Hermes/Babel-safety motivated. `const enum` works under `babel-preset-expo` because the preset strips `const` semantics and emits a normal enum object. If it ever breaks under a future preset version, fall back to `as const` object literal — components access values as `Fonts.BOLD` either way.
+
 ### Deviation #9 — Fonts disabled (always-empty values)
 - **Reason:** User opted to ship v0.1.x without fonts wiring. Removes need for users to source `.ttf` files and lets the generated app boot immediately without missing-font warnings.
 - **Resolution:** `gatherAnswers()` hard-codes `primaryFont = ""` + `secondaryFont = ""`. Generators' empty branch produces `Fonts = {} as const` + drops all `USE_FONTS_*` sentinels (clean line-removal, no orphan blanks). `_layout.tsx` ships without `useFonts` import, hook, or guard. `expo-font` stays in `dependencies` so apps can opt in later without a CLI re-run.
