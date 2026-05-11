@@ -80,3 +80,12 @@ Plan §7 missing imports found in shipped scope. Added:
 
 ### Deviation #6 — `validation.ts` reduced
 - Per SPEC §6: `only loginValidationSchema (email + password + rememberMe)`. MyRoster's validation may carry more schemas. Shipped version authored from scratch.
+
+### Deviation #7 — Add `babel-plugin-module-resolver` to install list
+- **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
+- **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
+
+### Deviation #8 — `patchBabel` writes stub when `babel.config.js` absent
+- **Reason:** SDK 54 `blank-typescript` template no longer ships `babel.config.js` — preset is loaded automatically via `expo-router`. Plan Phase 7 step 4 assumed file always present (`throw new Error("missing")`), which would kill the CLI mid-pipeline on every fresh SDK 54 scaffold.
+- **Resolution:** when file absent, `patchBabel` writes a minimal stub (`module.exports = function (api) { api.cache(true); return { presets: ['babel-preset-expo'], plugins: [] }; };`) before the AST merge runs. Subsequent runs see the file and parse normally; idempotent.
+- **Verified:** `npx create-expo-app foo --template blank-typescript --no-install` produces zero `babel.config.*` files at the time of this writing (Expo SDK 54.0.x).

@@ -94,6 +94,18 @@ describe("patchBabel", () => {
     expect(twice).toBe(once);
   });
 
+  it("writes stub + patches when babel.config.js absent (Deviation #8)", () => {
+    // Bare target — no babel.config.js — simulates SDK 54 blank-typescript.
+    patchBabel(target, {
+      workletsAutoIncluded: true,
+      workletsPkg: "react-native-worklets",
+      aliasMap: ALIAS,
+    });
+    const out = read();
+    expect(out).toContain("babel-preset-expo");
+    expect(out).toContain("module-resolver");
+  });
+
   it("aborts when only babel.config.ts present (no .js)", () => {
     fs.writeFileSync(path.join(target, "babel.config.ts"), "export default {};");
     expect(() =>

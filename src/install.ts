@@ -39,6 +39,9 @@ export function buildAlwaysInstalledList(workletsPkg: string): string[] {
     "expo-linear-gradient",
     "react-native-logs",
     "react-native-reanimated-skeleton",
+    // Deviation #7 — Phase 7 patchBabel injects ["module-resolver", { alias }];
+    // Metro fails on first bundle if the plugin pkg isn't installed.
+    "babel-plugin-module-resolver",
   ];
 }
 
@@ -177,6 +180,14 @@ export async function installNativeDeps(
   } else {
     seedLockfile(target, answers.packageManager);
   }
+
+  // Pre-install: materialize `expo` package so `expo install` can read SDK
+  // version. create-expo-app was invoked with `--no-install`, so node_modules
+  // is empty at this point. `expo install` itself shells out to `expo` (a
+  // local module) and refuses to run without it.
+  const pmCmd = answers.packageManager === "yarn" ? "yarn" : "npm";
+  log.step(`Materializing template deps via ${pmCmd} install…`);
+  await execa(pmCmd, ["install"], { cwd: target, stdio: "inherit" });
 
   log.step(`Installing ${allDeps.length} native deps via expo install (${answers.packageManager})…`);
   const args = ["--yes", "expo", "install", ...allDeps];

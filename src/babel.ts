@@ -19,13 +19,28 @@ import * as _generateNS from "@babel/generator";
 import * as t from "@babel/types";
 import { fileExists, log } from "./util.js";
 
-// ESM/CJS interop — @babel/traverse + @babel/generator publish as CJS with a
-// `.default` export, but `@types/babel__*` declare the namespace itself as the
-// callable. Cast through `any` to flatten both shapes at the runtime layer.
+// ESM/CJS interop — Node's ESM loader wraps CJS modules so @babel/traverse +
+// @babel/generator surface as `{ default: { default: <fn>, ...other } }` from
+// `import * as ns`. Unwrap up to two levels so the callable is reached
+// regardless of how the underlying CJS module is shaped (some Babel versions
+// expose the function directly on .default; newer ones nest one level deeper).
+function unwrap<T>(ns: unknown): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let cur: any = ns;
+  for (let i = 0; i < 3; i++) {
+    if (typeof cur === "function") return cur as T;
+    if (cur && typeof cur.default !== "undefined") {
+      cur = cur.default;
+      continue;
+    }
+    break;
+  }
+  return cur as T;
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const traverse: any = (_traverseNS as any).default ?? _traverseNS;
+const traverse: any = unwrap(_traverseNS);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const generate: any = (_generateNS as any).default ?? _generateNS;
+const generate: any = unwrap(_generateNS);
 
 export type PatchBabelOpts = {
   /** Phase 0 Probe 2 — when true, skip worklets/reanimated plugin insertion (preset auto-includes). */
@@ -86,8 +101,20 @@ export function patchBabel(target: string, opts: PatchBabelOpts): void {
       );
     }
   }
+  // Deviation #8 (docs/MIRROR_NOTES.md): SDK 54 blank-typescript no longer
+  // ships `babel.config.js` — preset-only via expo-router auto-config.
+  // Create the minimal stub here; patcher AST below then layers our entries on top.
   if (!fileExists(jsPath)) {
-    throw new Error(`patchBabel: ${jsPath} missing.`);
+    const stub = `module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: [],
+  };
+};
+`;
+    fs.writeFileSync(jsPath, stub);
+    log.step("babel.config.js missing — wrote default stub before patching.");
   }
 
   const source = fs.readFileSync(jsPath, "utf8");
