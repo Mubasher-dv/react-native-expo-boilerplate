@@ -14,6 +14,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveTargetDir } from "./bootstrap.js";
+import { runAdd } from "./add.js";
 import { gatherAnswers, validateEnvVars } from "./prompts.js";
 import {
   cleanupBlankTemplate,
@@ -60,9 +61,18 @@ function resolveSdkNotesPath(): string {
 }
 
 async function main(): Promise<void> {
+  // Subcommand dispatch — MUST precede `validateEnvVars` (which is scoped to
+  // the scaffold flow's env vars) and `resolveTargetDir` (which rejects an
+  // existing `package.json` in cwd — the exact condition `add` requires).
+  const argv = process.argv.slice(2);
+  if (argv[0] === "add") {
+    await runAdd(argv[1]);
+    return;
+  }
+
   validateEnvVars();
 
-  const arg = process.argv[2];
+  const arg = argv[0];
   const target = await resolveTargetDir(arg);
   log.info(`Target dir: ${target.dir}`);
   log.info(`App name:   ${target.name}`);
@@ -184,9 +194,20 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   log.error(err instanceof Error ? err.message : String(err));
-  log.warn(
-    "If the failure is mid-patch, the target dir may be in an inconsistent state. " +
-      "Re-run the CLI (patches are idempotent and will converge), or `rm -rf <path>` and start fresh.",
-  );
+  // Mid-patch warning is scaffold-flow specific. `add` failures either
+  // pre-mutation (guard) or single-file (overlay overwrite already happened
+  // before the throw) — separate guidance below.
+  const isAdd = process.argv[2] === "add";
+  if (isAdd) {
+    log.warn(
+      "If install failed after files were overlaid, the new template files are on disk " +
+        "but the dep is missing. Re-run the same `add` command to retry the install.",
+    );
+  } else {
+    log.warn(
+      "If the failure is mid-patch, the target dir may be in an inconsistent state. " +
+        "Re-run the CLI (patches are idempotent and will converge), or `rm -rf <path>` and start fresh.",
+    );
+  }
   process.exit(1);
 });

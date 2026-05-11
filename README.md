@@ -16,6 +16,34 @@ For subsequent runs after the dev-client is installed, use `yarn start` (= `expo
 
 The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
 
+## Post-scaffold `add` commands
+
+Skipped a feature at scaffold time? Retrofit it later without re-running the full scaffolder. Run from the project root (where `app.json` lives):
+
+```bash
+# bottom-sheet — installs @gorhom/bottom-sheet + drops 5 components under
+# src/ui/appComponents/ (customBottomSheetModal, appBottomSheetView,
+# appBottomSheetBackdrop, appBottomSheetScrollView, BottomSheetKeyboardAwareScrollView)
+npx codingpixel-expo-app add bottom-sheet
+
+# image-picker — installs expo-image-picker, drops PermissionService at
+# src/core/services/PermissionService.ts, splices MEDIA_TYPES + IMAGE_PICKER_OPTIONS
+# + CAMERA_OPTIONS into src/core/utils/constants.ts, and adds the
+# `expo-image-picker` plugin entry to app.json with default photos/camera permission strings.
+npx codingpixel-expo-app add image-picker
+```
+
+Both commands:
+
+- Auto-detect package manager from the project's lockfile (`yarn.lock` → yarn, `package-lock.json` → npm).
+- Run `expo install <pkg> --<pm>` so the installed version matches the project's Expo SDK.
+- Are **idempotent on the patch side** — plugin entry, constants splice, and dep install skip cleanly when already applied. **File overlays overwrite** template files (same semantics as initial scaffold), so re-running `add` clobbers any edits you made to the dropped components.
+- Refuse to run when `app.json` is missing — must be invoked from an Expo project root.
+
+After `add bottom-sheet` or `add image-picker`, rebuild the dev-client (`yarn ios` / `yarn android`) so the new native module links.
+
+> Edge: a project literally named `add` cannot be scaffolded as `npx codingpixel-expo-app add` (collides with the subcommand). Use a different name.
+
 ## Not Expo Go-compatible
 
 This template ships native modules that Expo Go can't load:
