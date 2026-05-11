@@ -145,3 +145,30 @@ export function applyBase(target: string, templatesRoot: string): void {
   const baseDir = path.join(templatesRoot, "base");
   copyTemplate(baseDir, target);
 }
+
+/**
+ * Phase 5 step 3 — overlay the 5 bottom-sheet appComponents on top of base.
+ * No-op when answers.bottomSheet === false (caller checks before invoking).
+ */
+export function applyBottomSheet(target: string, templatesRoot: string): void {
+  const bsDir = path.join(templatesRoot, "bottom-sheet");
+  if (!fs.existsSync(bsDir)) return;
+  copyTemplate(bsDir, target);
+}
+
+/**
+ * Phase 5 step 3 — overlay PermissionService.ts when answers.imagePicker. The
+ * media-constants snippet is spliced separately by `patchConstants` (Phase 5
+ * step 4) — this overlay only copies the service file.
+ */
+export function applyImagePicker(target: string, templatesRoot: string): void {
+  const ipDir = path.join(templatesRoot, "image-picker");
+  if (!fs.existsSync(ipDir)) return;
+  // Copy the `src/` subtree only — the snippet file lives at the root of
+  // templates/image-picker/ for `patchConstants` to read directly, and we
+  // don't want it ending up in the generated project.
+  const srcSubtree = path.join(ipDir, "src");
+  if (fs.existsSync(srcSubtree)) {
+    copyTemplate(srcSubtree, path.join(target, "src"));
+  }
+}

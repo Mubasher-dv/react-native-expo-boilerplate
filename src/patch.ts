@@ -118,29 +118,25 @@ export function patchExpoRouterEntry(target: string): void {
 
 // ---------- constants splice (Phase 5 step 4) ----------
 
-export function patchConstants(target: string, answers: Answers): void {
+/**
+ * Always runs — drops the `@@MEDIA_CONSTANTS@@` sentinel line cleanly even
+ * when `imagePicker === false` (fixes v3 orphan-sentinel bug). Splices the
+ * media-constants snippet on `imagePicker === true`.
+ */
+export function patchConstants(
+  target: string,
+  templatesRoot: string,
+  answers: Answers,
+): void {
   const p = path.join(target, "src/core/utils/constants.ts");
   if (!fileExists(p)) {
     throw new Error(`patchConstants: ${p} missing — was applyBase run first?`);
   }
   const source = fs.readFileSync(p, "utf8");
-  const snippetPath = path.join(
-    target,
-    "..",
-    ".cpx-image-picker-snippet.tmp", // never actually written; placeholder
-  );
-  // Read snippet from CLI's templates dir at runtime instead — see callsite.
-  void snippetPath;
   let replacement = "";
   if (answers.imagePicker) {
-    const cliTemplatesDir = process.env.CPX_TEMPLATES_DIR; // set by caller
-    if (!cliTemplatesDir) {
-      throw new Error(
-        "patchConstants: CPX_TEMPLATES_DIR env not set; pipeline wiring bug.",
-      );
-    }
     const sp = path.join(
-      cliTemplatesDir,
+      templatesRoot,
       "image-picker/media-constants.snippet.ts",
     );
     replacement = fs.readFileSync(sp, "utf8").trimEnd();
