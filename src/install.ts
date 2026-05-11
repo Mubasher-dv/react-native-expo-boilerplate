@@ -47,6 +47,16 @@ export function buildAlwaysInstalledList(workletsPkg: string): string[] {
     // resolve 'expo-linking' from .../expo-router/build/views/Unmatched.js").
     "expo-linking",
     "expo-constants",
+    // Deviation #18 — react-native-mmkv 3.x+ peer deps + system-ui.
+    // mmkv was rewritten on Nitro Modules; without `react-native-nitro-modules`,
+    // gradle fails with "Project with path ':react-native-nitro-modules' could
+    // not be found in project ':react-native-mmkv'" and CocoaPods fails with
+    // "Unable to find a specification for `NitroModules` depended upon by `NitroMmkv`".
+    "react-native-nitro-modules",
+    // expo-system-ui is required by `expo prebuild` for `userInterfaceStyle`
+    // in app.json (default value "light"). Without it, prebuild warns:
+    // "Install expo-system-ui in your project to enable this feature."
+    "expo-system-ui",
   ];
 }
 

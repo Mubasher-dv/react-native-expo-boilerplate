@@ -48,6 +48,8 @@ describe("buildAlwaysInstalledList", () => {
     expect(list).toContain("babel-plugin-module-resolver"); // Deviation #7
     expect(list).toContain("expo-linking"); // Deviation #11
     expect(list).toContain("expo-constants"); // Deviation #11
+    expect(list).toContain("react-native-nitro-modules"); // Deviation #18 (mmkv 3.x+ peer)
+    expect(list).toContain("expo-system-ui"); // Deviation #18 (userInterfaceStyle)
   });
 });
 
