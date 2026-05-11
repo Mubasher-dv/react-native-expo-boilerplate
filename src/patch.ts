@@ -281,7 +281,7 @@ const SPEC_PATHS: Record<string, string[]> = {
   "@components/*": ["src/ui/components/*"],
   "@icons/*": ["src/ui/iconComponents/*"],
   "@features/*": ["src/features/*"],
-  "@assets": ["assets"],
+  "@assets": ["src/assets"],
 };
 
 /**

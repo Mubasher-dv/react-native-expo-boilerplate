@@ -29,7 +29,7 @@ import {
 import { patchBabel } from "./babel.js";
 import { buildLayoutReplacements } from "./fonts.js";
 import { ensureLockfile, installNativeDeps } from "./install.js";
-import { log } from "./util.js";
+import { ensureDir, log } from "./util.js";
 import { readSDKNotes } from "./sdkNotes.js";
 import { SDK_PROBE_RESULTS } from "./sdkProbeResults.js";
 
@@ -75,6 +75,14 @@ async function main(): Promise<void> {
   const templatesRoot = resolveTemplatesRoot();
   log.step("Overlaying templates/base/ …");
   applyBase(target.dir, templatesRoot);
+
+  // Ensure empty dirs that npm strips from the tarball still exist in the
+  // generated app (Deviation #22). `src/features/` + `src/core/hooks/` are
+  // intentionally empty placeholders apps fill as features grow.
+  for (const rel of ["src/features", "src/core/hooks"]) {
+    ensureDir(path.join(target.dir, rel));
+  }
+
   if (answers.bottomSheet) {
     log.step("Overlaying templates/bottom-sheet/ …");
     applyBottomSheet(target.dir, templatesRoot);
@@ -137,7 +145,7 @@ async function main(): Promise<void> {
       "@components": "./src/ui/components",
       "@icons": "./src/ui/iconComponents",
       "@features": "./src/features",
-      "@assets": "./assets",
+      "@assets": "./src/assets",
     },
   });
 

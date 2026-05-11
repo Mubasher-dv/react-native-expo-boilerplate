@@ -57,9 +57,9 @@ describe("generateUseFontsBlocks", () => {
     expect(r.hookBlock.match(/require\(/g)?.length).toBe(8);
   });
 
-  it("require paths point at ../../assets/fonts/", () => {
+  it("require paths point at ../assets/fonts/ (assets moved to src/assets, Deviation #22)", () => {
     const r = generateUseFontsBlocks("Inter", "");
-    expect(r.hookBlock).toContain('"../../assets/fonts/Inter-Regular.ttf"');
+    expect(r.hookBlock).toContain('"../assets/fonts/Inter-Regular.ttf"');
   });
 });
 

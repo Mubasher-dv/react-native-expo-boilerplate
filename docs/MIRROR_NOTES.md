@@ -85,6 +85,15 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #22 — Move `assets/` to `src/assets/` + force-create empty dirs
+- **Reason:** User-requested layout. Plan v5 + SPEC §6 originally pinned `assets/` at project root; user wants `src/assets/` instead. Also `src/features/` + `src/core/hooks/` should ship empty (no `.gitkeep`), but npm strips empty dirs from tarballs.
+- **Resolution:**
+  - `templates/base/assets/` → `templates/base/src/assets/`. `index.ts` renamed to `index.tsx`, content reduced to `export const Images = {};`. `assets/fonts/` + `assets/images/` retain `.gitkeep` (so the dirs survive the tarball + ship into generated app for users to drop their `.ttf` / `.png` into).
+  - `tsconfig.json` `compilerOptions.paths["@assets"]` now `["src/assets"]` (was `["assets"]`).
+  - `babel.config.js` `module-resolver` `@assets` alias now `./src/assets` (was `./assets`).
+  - `generateUseFontsBlocks` require path: `../assets/fonts/...` (single `..` since `src/app/_layout.tsx` is one level under `src/`; was `../../assets/fonts/...` for project-root layout).
+  - `src/index.ts` post-applyBase: `ensureDir(src/features)` + `ensureDir(src/core/hooks)` so the empty dirs exist in the generated app even though npm tarballs cannot preserve them.
+
 ### Deviation #21 — `cleanupBlankTemplate` also removes root `index.ts`
 - **Reason:** `npx tsc --noEmit` on generated app errored with `index.ts(3,17): Cannot find module './App'`. blank-typescript ships both `App.tsx` (root component) AND `index.ts` (calls `registerRootComponent(App)`). We delete `App.tsx` (collides with expo-router) but the dangling `import './App'` in `index.ts` then fails type-check. The file is unused at runtime since `package.json#main = expo-router/entry`, but TypeScript still type-checks it.
 - **Resolution:** `cleanupBlankTemplate` now removes both files.

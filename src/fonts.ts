@@ -66,8 +66,11 @@ export function generateUseFontsBlocks(
     );
   }
   const importBlock = `import { useFonts } from "expo-font";`;
+  // From `src/app/_layout.tsx` to `src/assets/fonts/`:
+  //   .. → src   →   ../assets/fonts/<file>
+  // (Was `../../assets/fonts/...` when assets lived at project root pre-Deviation #22.)
   const mapEntries = fontPairs
-    .map(([key, file]) => `    "${key}": require("../../assets/fonts/${file}"),`)
+    .map(([key, file]) => `    "${key}": require("../assets/fonts/${file}"),`)
     .join("\n");
   const hookBlock = `  const [loaded] = useFonts({\n${mapEntries}\n  });`;
   const guardBlock = `  if (!loaded) return null;`;
