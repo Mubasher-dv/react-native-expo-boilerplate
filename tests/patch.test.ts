@@ -3,6 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  bundleIdFor,
+  bundleIdSegment,
   patchAppJson,
   patchAppJsonPlugins,
   patchExpoRouterEntry,
@@ -42,6 +44,26 @@ describe("slugify", () => {
   });
 });
 
+describe("bundleIdSegment", () => {
+  it("strips dashes from slug", () => {
+    expect(bundleIdSegment("My Cool App")).toBe("mycoolapp");
+  });
+  it("prefixes with 'app' when starting with a digit", () => {
+    expect(bundleIdSegment("1pp")).toBe("app1pp");
+  });
+  it("empty / non-alnum → 'app'", () => {
+    expect(bundleIdSegment("!!!")).toBe("app");
+  });
+});
+
+describe("bundleIdFor", () => {
+  it("composes com.codingpixel.<safeName>", () => {
+    expect(bundleIdFor("My Cool App")).toBe("com.codingpixel.mycoolapp");
+    expect(bundleIdFor("cpx-e2e")).toBe("com.codingpixel.cpxe2e");
+    expect(bundleIdFor("1pp")).toBe("com.codingpixel.app1pp");
+  });
+});
+
 function seedAppJson(plugins: unknown[] = []): void {
   fs.writeFileSync(
     path.join(tmp, "app.json"),
@@ -54,14 +76,38 @@ function readAppJson() {
 }
 
 describe("patchAppJson", () => {
-  it("sets name + slug + scheme + adds expo-router plugin", () => {
+  it("sets name + slug + scheme + bundleId + adds expo-router plugin", () => {
     seedAppJson([]);
     patchAppJson(tmp, "Test App", baseAnswers);
     const j = readAppJson();
     expect(j.expo.name).toBe("Test App");
     expect(j.expo.slug).toBe("test-app");
     expect(j.expo.scheme).toBe("test-app");
+    expect(j.expo.ios.bundleIdentifier).toBe("com.codingpixel.testapp");
+    expect(j.expo.android.package).toBe("com.codingpixel.testapp");
     expect(j.expo.plugins).toContain("expo-router");
+  });
+
+  it("preserves user-set ios.bundleIdentifier + android.package", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify(
+        {
+          expo: {
+            name: "demo",
+            slug: "demo",
+            ios: { bundleIdentifier: "com.example.custom" },
+            android: { package: "com.example.custom" },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    patchAppJson(tmp, "demo", baseAnswers);
+    const j = readAppJson();
+    expect(j.expo.ios.bundleIdentifier).toBe("com.example.custom");
+    expect(j.expo.android.package).toBe("com.example.custom");
   });
 
   it("idempotent — second pass adds no duplicate plugin", () => {

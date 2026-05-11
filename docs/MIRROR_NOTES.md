@@ -85,6 +85,12 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Reason:** Phase 7 `patchBabel` injects `["module-resolver", { alias: {...} }]` into `babel.config.js`. The plugin package itself must be installed or Metro crashes with `Cannot find module 'babel-plugin-module-resolver'` on first bundle.
 - **Resolution:** added to `buildAlwaysInstalledList`. (Plan §7 omitted it.)
 
+### Deviation #12 — `patchAppJson` sets `android.package` + `ios.bundleIdentifier`
+- **Reason:** `expo run:android` / `expo run:ios` errors with `Required property 'android.package' is not found in the project app.json` (or `ios.bundleIdentifier`). create-expo-app's blank-typescript template no longer ships defaults for these on SDK 54.
+- **Resolution:** `patchAppJson` derives a reverse-DNS bundle ID from the user-supplied app name via new `bundleIdFor(name)` helper. Format: `com.codingpixel.<safeName>` where `safeName` = slugified-name with dashes stripped + leading-digit guard. Preserves user-set values.
+- **Examples:** `My Cool App` → `com.codingpixel.mycoolapp`. `cpx-e2e` → `com.codingpixel.cpxe2e`. `1pp` → `com.codingpixel.app1pp`.
+- **Apps that want a different namespace:** edit `app.json` `expo.ios.bundleIdentifier` + `expo.android.package` after scaffold; the patcher only fills defaults when missing.
+
 ### Deviation #11 — Add `expo-linking` + `expo-constants` to install list
 - **Reason:** `expo-router` requires both as peer deps but `expo install expo-router` does NOT auto-install them. First Metro bundle in the generated app fails with `Unable to resolve "expo-linking" from .../expo-router/build/views/Unmatched.js`. Same risk for `expo-constants` (used by other expo-router internals).
 - **Resolution:** added both to `buildAlwaysInstalledList`. Versions inherit from current SDK via `expo install`.

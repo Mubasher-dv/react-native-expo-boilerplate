@@ -26,6 +26,29 @@ export function slugify(name: string): string {
   );
 }
 
+/**
+ * Build a reverse-DNS bundle identifier segment from the app name.
+ *
+ * Android `package` + iOS `bundleIdentifier` constraints:
+ *   - Lowercase letters / digits only per segment.
+ *   - No dashes, dots, or other punctuation INSIDE a segment.
+ *   - Each segment must START with a letter (no leading digits).
+ *   - At least two segments separated by dots.
+ *
+ * `my-test-app` → `mytestapp` → final ID `com.codingpixel.mytestapp`.
+ * `1pp` → `app1pp` (leading-digit guard).
+ */
+export function bundleIdSegment(name: string): string {
+  let seg = slugify(name).replace(/-/g, "");
+  if (!/^[a-z]/.test(seg)) seg = `app${seg}`;
+  return seg || "app";
+}
+
+/** Compose the full bundle identifier with the `com.codingpixel.` namespace prefix. */
+export function bundleIdFor(name: string): string {
+  return `com.codingpixel.${bundleIdSegment(name)}`;
+}
+
 function readJson<T>(p: string): T {
   return JSON.parse(fs.readFileSync(p, "utf8")) as T;
 }
@@ -42,6 +65,8 @@ type ExpoAppJson = {
     slug?: string;
     scheme?: string;
     plugins?: Array<string | [string, Record<string, unknown>]>;
+    ios?: { bundleIdentifier?: string; [k: string]: unknown };
+    android?: { package?: string; [k: string]: unknown };
     [key: string]: unknown;
   };
 };
@@ -73,6 +98,16 @@ export function patchAppJson(
   json.expo.name = name;
   json.expo.slug = slugify(name);
   json.expo.scheme = slugify(name);
+
+  // android.package + ios.bundleIdentifier — required to launch the app on
+  // either platform (Expo CLI errors with "Required property ... is not found"
+  // otherwise). Preserve any user-set value; only fill when missing.
+  const bundleId = bundleIdFor(name);
+  json.expo.ios ??= {};
+  if (!json.expo.ios.bundleIdentifier) json.expo.ios.bundleIdentifier = bundleId;
+  json.expo.android ??= {};
+  if (!json.expo.android.package) json.expo.android.package = bundleId;
+
   json.expo.plugins ??= [];
   if (!json.expo.plugins.some((e) => nameOf(e) === "expo-router")) {
     json.expo.plugins.push("expo-router");
