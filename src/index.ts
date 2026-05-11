@@ -1,0 +1,3 @@
+// Entry point. Phase 0 placeholder; later phases wire in
+// validateEnvVars → resolveTargetDir → runCreateExpoApp → gatherAnswers → ...
+console.log("hello from @codingpixel/create-expo-app");
