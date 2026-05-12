@@ -10,6 +10,7 @@ Run `codingpixel-expo-app add feature <name>`. Creates a top-level feature ownin
 
 Prompts:
 - First screen name
+- Make this feature the app's initial route? (rewrites `src/app/index.tsx` → `<Redirect href="/(<name>)" />` on yes)
 
 Creates:
 

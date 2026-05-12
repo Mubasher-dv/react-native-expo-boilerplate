@@ -15,6 +15,7 @@ import {
   registerRoleInRoutes,
   rollback,
   routeFileExists,
+  setRootIndexRedirect,
   topLevelNameTaken,
   writeFlatRouteReExport,
   writeFlatScreenFiles,
@@ -24,23 +25,44 @@ import {
 
 export type AddStandaloneFeatureOptions = {
   target?: string;
-  /** Test injection: override the first-screen prompt. */
-  promptInputs?: () => Promise<{ screen: string }>;
+  /** Test injection: override the first-screen + root-initial prompts. */
+  promptInputs?: () => Promise<{
+    screen: string;
+    /**
+     * If true, `src/app/index.tsx` gets rewritten to `<Redirect href="/(<name>)" />`
+     * so the app lands on this standalone feature on launch. Default false —
+     * root index left untouched.
+     */
+    makeRootInitial?: boolean;
+  }>;
   /** Test-only: throw after writes are recorded but before the routes splice. */
   _failAfterWrites?: boolean;
 };
 
-async function promptScreen(): Promise<{ screen: string }> {
+async function promptScreen(): Promise<{
+  screen: string;
+  makeRootInitial: boolean;
+}> {
   const a = await prompts(
-    {
-      type: "text",
-      name: "screen",
-      message: "First screen name?",
-      validate: (v: string) => (v.trim() === "" ? "Required" : true),
-    },
+    [
+      {
+        type: "text",
+        name: "screen",
+        message: "First screen name?",
+        validate: (v: string) => (v.trim() === "" ? "Required" : true),
+      },
+      {
+        type: "toggle",
+        name: "makeRootInitial",
+        message: "Make this feature the app's initial route (rewrite src/app/index.tsx)?",
+        initial: false,
+        active: "yes",
+        inactive: "no",
+      },
+    ],
     { onCancel: () => process.exit(1) },
   );
-  return { screen: a.screen };
+  return { screen: a.screen, makeRootInitial: !!a.makeRootInitial };
 }
 
 export async function addStandaloneFeature(
@@ -119,6 +141,12 @@ export async function addStandaloneFeature(
     // 7. routes.tsx splice — same helper works for any (name) group
     const routesPath = registerRoleInRoutes(target, feature, j);
     if (routesPath) written.push(routesPath);
+
+    // 8. optional root index redirect — `src/app/index.tsx` → /(<feature>)
+    if (inputs.makeRootInitial) {
+      const rootPath = setRootIndexRedirect(target, feature, j);
+      if (rootPath) written.push(rootPath);
+    }
   } catch (err) {
     log.error(`add feature failed — rolling back changes`);
     await rollback(j);

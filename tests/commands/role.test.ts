@@ -118,6 +118,88 @@ describe("addRole", () => {
     ).rejects.toThrow(/reserved/i);
   });
 
+  it("rewrites src/app/index.tsx → <Redirect href=\"/(role)\" /> when makeRootInitial=true", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    // Seed a pre-existing root index (placeholder shipped by templates/base).
+    fs.writeFileSync(
+      path.join(t, "src/app/index.tsx"),
+      "export default function Home() { return null; }\n",
+    );
+    await addRole("customer", {
+      target: t,
+      promptInputs: async () => ({
+        feature: "dashboard",
+        screen: "home",
+        makeRootInitial: true,
+      }),
+    });
+    const root = fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8");
+    expect(root).toContain('<Redirect href="/(customer)" />');
+    expect(root).toContain('import { Redirect } from "expo-router"');
+  });
+
+  it("leaves src/app/index.tsx untouched when makeRootInitial is omitted / false", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    const original = "export default function Home() { return null; }\n";
+    fs.writeFileSync(path.join(t, "src/app/index.tsx"), original);
+    await addRole("customer", {
+      target: t,
+      promptInputs: async () => ({
+        feature: "dashboard",
+        screen: "home",
+        makeRootInitial: false,
+      }),
+    });
+    expect(fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8")).toBe(
+      original,
+    );
+  });
+
+  it("creates src/app/index.tsx when it doesn't exist and makeRootInitial=true", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    // No pre-existing index.tsx.
+    expect(fs.existsSync(path.join(t, "src/app/index.tsx"))).toBe(false);
+    await addRole("customer", {
+      target: t,
+      promptInputs: async () => ({
+        feature: "dashboard",
+        screen: "home",
+        makeRootInitial: true,
+      }),
+    });
+    expect(fs.existsSync(path.join(t, "src/app/index.tsx"))).toBe(true);
+    expect(
+      fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)" />');
+  });
+
+  it("rollback restores src/app/index.tsx snapshot on late failure when makeRootInitial=true", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    const original = "export default function Home() { return null; }\n";
+    fs.writeFileSync(path.join(t, "src/app/index.tsx"), original);
+    await expect(
+      addRole("customer", {
+        target: t,
+        promptInputs: async () => ({
+          feature: "dashboard",
+          screen: "home",
+          makeRootInitial: true,
+        }),
+        _failAfterWrites: true,
+      }),
+    ).rejects.toThrow(/_failAfterWrites/);
+    // _failAfterWrites throws BEFORE the optional root rewrite, so the
+    // original content remains. (The order matters: rollback must work
+    // whether the root rewrite happened or not.)
+    expect(fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8")).toBe(
+      original,
+    );
+  });
+
   it("refuses `auth` with a hint to use `add feature auth`", async () => {
     const t = mkTmp();
     seedExpoApp(t);
