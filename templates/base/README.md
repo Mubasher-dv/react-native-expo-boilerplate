@@ -76,6 +76,18 @@ Rebuild after each recipe:
 - Library recipes (`bottom-sheet`, `image-picker`) → `yarn ios` / `yarn android` (links new native module into dev-client).
 - Asset recipes (`app-icon`, `splash`) → `npx expo prebuild --clean` then `yarn ios` / `yarn android` (regenerates ios/ + android/ from app.json).
 
+### Generate role / feature / screen
+
+```bash
+codingpixel-expo add role <role>             # prompts feature + screen
+codingpixel-expo add feature <role> <name>   # prompts screen + initial?
+codingpixel-expo add screen <role> <feature> <name>   # prompts initial?
+```
+
+Names are normalized to `camelCase`. ViewModels and components use `PascalCase`. Atomic: rolls back on failure.
+
+See the project README for the full layout and collision rules.
+
 ## Bundle identifier
 
 Defaults to `com.<app-name-no-dashes>`. Edit `app.json` `expo.ios.bundleIdentifier` + `expo.android.package` before submitting to App Store / Play Store.

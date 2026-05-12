@@ -69,6 +69,21 @@ async function main(): Promise<void> {
   // Single verb: `add`. (Earlier versions exposed `generate` + `g` aliases —
   // dropped to keep the surface minimal; only `add` remains supported.)
   const argv = process.argv.slice(2);
+  if (argv[0] === "add" && argv[1] === "role") {
+    const { addRole } = await import("./commands/role.js");
+    await addRole(argv[2]);
+    return;
+  }
+  if (argv[0] === "add" && argv[1] === "feature") {
+    const { addFeature } = await import("./commands/feature.js");
+    await addFeature(argv[2], argv[3]);
+    return;
+  }
+  if (argv[0] === "add" && argv[1] === "screen") {
+    const { addScreen } = await import("./commands/screen.js");
+    await addScreen(argv[2], argv[3], argv[4]);
+    return;
+  }
   if (argv[0] === "add") {
     await runAdd(argv[1]);
     return;

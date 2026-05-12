@@ -125,6 +125,70 @@ After the recipe completes, the CLI prints rebuild commands tailored to whether 
 
 > Edge: the project name `add` is reserved — it collides with the subcommand dispatcher. Use a different name when scaffolding.
 
+### Generate role / feature / screen
+
+Scaffold the navigation/feature layout in an already-scaffolded project.
+
+#### `add role <name>`
+
+Creates an Expo Router group, the feature root, and one starter screen.
+
+```bash
+codingpixel-expo add role auth
+# prompts: First feature name? dashboard
+# prompts: First screen name?  onBoarding
+```
+
+Produces:
+
+```
+src/features/auth/dashboard/
+  types.ts
+  onBoarding/
+    index.tsx
+    viewModel/_api.ts
+    viewModel/useOnBoardingViewModel.tsx
+src/app/(auth)/
+  _layout.tsx     # empty <Stack headerShown:false />
+  index.tsx       # <Redirect href="/(auth)/onBoarding" />
+  onBoarding.tsx  # re-export from @features/auth/dashboard/onBoarding
+```
+
+Also registers `<Stack.Screen name="(auth)" />` in `src/app/routes.tsx`.
+
+#### `add feature <role> <name>`
+
+Adds a sibling feature under an existing role.
+
+```bash
+codingpixel-expo add feature auth profile
+# prompts: Screen name?            edit
+# prompts: Make initial screen?    no
+```
+
+Refuses if the role does not exist or the feature already exists. Refuses if the chosen screen name collides with an existing route file in the same role group. The route layout is **flat per role**: `src/app/(<role>)/<screen>.tsx`, so screen names must be unique within a role.
+
+If you answer "yes" to the initial-screen prompt, the redirect in `src/app/(<role>)/index.tsx` is rewritten to point at the new screen.
+
+#### `add screen <role> <feature> <name>`
+
+Adds a sibling screen to an existing feature.
+
+```bash
+codingpixel-expo add screen auth dashboard teamDetails
+# prompts: Make initial screen? no
+```
+
+Refuses if the role or feature does not exist, the screen already exists, or the screen name collides with an existing route file in the role.
+
+#### Naming
+
+All names are accepted as `kebab-case`, `snake_case`, `space separated`, or `camelCase`/`PascalCase` and normalized to `camelCase`. ViewModel hooks use `PascalCase`: `teamDetails` → `useTeamDetailsViewModel`.
+
+#### Atomic writes
+
+Every command is all-or-nothing. If any step fails (e.g. a malformed `routes.tsx`), the command rolls back every file it just created or modified and surfaces the underlying error.
+
 ## Not Expo Go-compatible
 
 This template ships native modules that Expo Go can't load:

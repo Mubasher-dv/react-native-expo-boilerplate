@@ -91,7 +91,9 @@ function printRebuildReminder(pm: PackageManager): void {
   log.raw("");
   log.warn("Rebuild the dev-client so the new native module links:");
   log.raw(`  ${cmd} ios       # builds + installs dev-client + launches (iOS)`);
-  log.raw(`  ${cmd} android   # same for Android (needs emulator/device + Android SDK)`);
+  log.raw(
+    `  ${cmd} android   # same for Android (needs emulator/device + Android SDK)`,
+  );
   log.raw("");
   log.info(
     "Skipping the rebuild leaves the old dev-client in place — the bundler will fail " +
@@ -108,7 +110,10 @@ function printRebuildReminder(pm: PackageManager): void {
  * every patch in the recipe was an idempotent no-op (e.g. re-running
  * `add image-picker` on an already-patched project).
  */
-function printFilesChanged(written: string[], removed: string[] = []): void {
+export function printFilesChanged(
+  written: string[],
+  removed: string[] = [],
+): void {
   log.raw("");
   log.raw("Files changed in your project:");
   if (written.length === 0 && removed.length === 0) {
@@ -229,7 +234,10 @@ export function ensureImagePickerPlugin(target: string): void {
  *   3. Otherwise (sentinel was dropped during scaffold per current behavior)
  *      — append snippet at EOF separated by blank line.
  */
-export function spliceMediaConstants(target: string, templatesRoot: string): void {
+export function spliceMediaConstants(
+  target: string,
+  templatesRoot: string,
+): void {
   const p = path.join(target, "src/core/utils/constants.ts");
   if (!fileExists(p)) {
     throw new Error(
@@ -279,7 +287,9 @@ export async function addImagePicker(target: string): Promise<void> {
   log.success("image-picker added.");
   log.raw("");
   log.raw("Service available: @services/PermissionService");
-  log.raw("Constants available: @utils/constants → MEDIA_TYPES, IMAGE_PICKER_OPTIONS, CAMERA_OPTIONS");
+  log.raw(
+    "Constants available: @utils/constants → MEDIA_TYPES, IMAGE_PICKER_OPTIONS, CAMERA_OPTIONS",
+  );
 
   printFilesChanged([
     "src/core/services/PermissionService.ts",
@@ -330,7 +340,9 @@ export function readPngDimensions(
   } finally {
     if (fd !== null) fs.closeSync(fd);
   }
-  const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const PNG_MAGIC = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
   if (!buf.subarray(0, 8).equals(PNG_MAGIC)) return null;
   return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
@@ -386,7 +398,9 @@ function printAssetRebuildReminder(pm: PackageManager): void {
   const cmd = pm === "yarn" ? "yarn" : "npm run";
   log.raw("");
   log.warn("Re-bake native projects to apply the asset / config changes:");
-  log.raw(`  npx expo prebuild --clean   # regenerates ios/ + android/ from app.json`);
+  log.raw(
+    `  npx expo prebuild --clean   # regenerates ios/ + android/ from app.json`,
+  );
   log.raw(`  ${cmd} ios                  # build + launch (iOS)`);
   log.raw(`  ${cmd} android              # build + launch (Android)`);
 }
@@ -454,9 +468,10 @@ export function assertIconExtension(absPath: string): IconExt {
  *
  * Warnings only — never throws. Caller surfaces them as `log.warn` lines.
  */
-export function validateIconSource(
-  filePath: string,
-): { dims: { width: number; height: number } | null; warnings: string[] } {
+export function validateIconSource(filePath: string): {
+  dims: { width: number; height: number } | null;
+  warnings: string[];
+} {
   const warnings: string[] = [];
   const dims = readPngDimensions(filePath);
   if (!dims) {
@@ -530,7 +545,10 @@ function stripDotSlash(p: string): string {
  *
  * Exported for testing.
  */
-export function deriveIconDests(target: string, ext: IconExt = "png"): IconDests {
+export function deriveIconDests(
+  target: string,
+  ext: IconExt = "png",
+): IconDests {
   const appJsonPath = path.join(target, "app.json");
   const json = JSON.parse(fs.readFileSync(appJsonPath, "utf8")) as ExpoAppJson;
   const expo = (json.expo ?? {}) as Record<string, unknown>;
@@ -690,8 +708,7 @@ export async function addAppIcon(target: string): Promise<void> {
     {
       type: "text",
       name: "iconPath",
-      message:
-        `Path to source icon (.png / .jpg / .jpeg, absolute or relative to project root) — ${DEFAULT_ICON_SIZE}×${DEFAULT_ICON_SIZE} recommended`,
+      message: `Path to source icon (.png, absolute or relative to project root) — ${DEFAULT_ICON_SIZE}×${DEFAULT_ICON_SIZE} recommended`,
       validate: (v: string) => (v.trim() === "" ? "Required" : true),
     },
     { onCancel: () => process.exit(1) },
@@ -739,7 +756,10 @@ export async function addAppIcon(target: string): Promise<void> {
     for (const baseDest of [iconAbsDest, adaptiveAbsDest]) {
       const baseExt = path.extname(baseDest);
       const baseName = path.basename(baseDest, baseExt);
-      if (!fs.existsSync(path.join(dir, `${baseName}${baseExt}`)) && dir !== path.dirname(baseDest)) {
+      if (
+        !fs.existsSync(path.join(dir, `${baseName}${baseExt}`)) &&
+        dir !== path.dirname(baseDest)
+      ) {
         // No corresponding file in this dir; skip wholesale cleanup.
         continue;
       }
@@ -775,7 +795,10 @@ export async function addAppIcon(target: string): Promise<void> {
       `  expo.android.adaptiveIcon.backgroundColor       → #ffffff  (only-if-absent — user value preserved)`,
   );
 
-  printFilesChanged([dests.iconRel, dests.adaptiveRel, "app.json"], removedFiles);
+  printFilesChanged(
+    [dests.iconRel, dests.adaptiveRel, "app.json"],
+    removedFiles,
+  );
 
   const pm = await detectProjectPm(target);
   printAssetRebuildReminder(pm);
@@ -861,7 +884,10 @@ export function setSplashConfig(
       (e) => pluginName(e) === "expo-splash-screen",
     );
     if (idx === -1) {
-      json.expo.plugins.push(["expo-splash-screen", { ...options, dark: newDark }]);
+      json.expo.plugins.push([
+        "expo-splash-screen",
+        { ...options, dark: newDark },
+      ]);
     } else {
       const existing = json.expo.plugins[idx];
       const prevOpts: Record<string, unknown> =
@@ -962,9 +988,11 @@ export function patchLayoutForSplash(target: string): void {
       break;
     }
     const inner = m[1].trim().replace(/,\s*$/, "");
-    const merged =
-      inner.length === 0 ? "useEffect" : `${inner}, useEffect`;
-    lines[i] = lines[i].replace(reactNamedRe, `import { ${merged} } from "react";`);
+    const merged = inner.length === 0 ? "useEffect" : `${inner}, useEffect`;
+    lines[i] = lines[i].replace(
+      reactNamedRe,
+      `import { ${merged} } from "react";`,
+    );
     useEffectImported = true;
     mergedIntoReactImport = true;
     break;
@@ -976,7 +1004,9 @@ export function patchLayoutForSplash(target: string): void {
     if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
   }
   if (lastImportIdx === -1) {
-    log.warn("No `import` statements found in _layout.tsx — aborting splash layout splice.");
+    log.warn(
+      "No `import` statements found in _layout.tsx — aborting splash layout splice.",
+    );
     return;
   }
   const inserts: string[] = [];
@@ -995,7 +1025,9 @@ export function patchLayoutForSplash(target: string): void {
     }
   }
   if (rootIdx === -1) {
-    log.warn("Lost track of RootLayout after import splice — aborting splash layout splice.");
+    log.warn(
+      "Lost track of RootLayout after import splice — aborting splash layout splice.",
+    );
     return;
   }
   // Ensure a blank line above the new module-level call for readability.
@@ -1022,7 +1054,9 @@ export function patchLayoutForSplash(target: string): void {
     }
   }
   if (rootIdx === -1) {
-    log.warn("Lost track of RootLayout after module-block splice — aborting useEffect splice.");
+    log.warn(
+      "Lost track of RootLayout after module-block splice — aborting useEffect splice.",
+    );
     return;
   }
   // Function opening brace is on the same line in our template. Insert right after.
@@ -1101,8 +1135,7 @@ export async function addSplash(target: string): Promise<void> {
     {
       type: "number",
       name: "imageWidth",
-      message:
-        `Splash image width in dp (Android 12+ icon canvas is 192dp — values above this crop on newer Android; iOS is unconstrained). Default ${DEFAULT_SPLASH_IMAGE_WIDTH}`,
+      message: `Splash image width in dp (Android 12+ icon canvas is 192dp — values above this crop on newer Android; iOS is unconstrained). Default ${DEFAULT_SPLASH_IMAGE_WIDTH}`,
       initial: DEFAULT_SPLASH_IMAGE_WIDTH,
       validate: (v: number) =>
         Number.isInteger(v) &&
