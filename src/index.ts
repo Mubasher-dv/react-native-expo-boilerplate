@@ -25,6 +25,7 @@ import { applyBase, applyBottomSheet, applyImagePicker } from "./overlay.js";
 import {
   patchAppJson,
   patchAppJsonAssetPaths,
+  patchAppJsonBuildProperties,
   patchAppJsonPlugins,
   patchConstants,
   patchExpoRouterEntry,
@@ -74,14 +75,39 @@ async function main(): Promise<void> {
     await addRole(argv[2]);
     return;
   }
+  // `add feature` — arity dispatch:
+  //   1 arg (`add feature <name>`)         → standalone (flat) feature
+  //   2 args (`add feature <role> <name>`) → nested feature under role
   if (argv[0] === "add" && argv[1] === "feature") {
-    const { addFeature } = await import("./commands/feature.js");
-    await addFeature(argv[2], argv[3]);
+    if (argv[3]) {
+      const { addFeature } = await import("./commands/feature.js");
+      await addFeature(argv[2], argv[3]);
+    } else {
+      const { addStandaloneFeature } = await import(
+        "./commands/standaloneFeature.js"
+      );
+      await addStandaloneFeature(argv[2]);
+    }
     return;
   }
+  // `add bottom-tab <role>` — scaffold a `(tabs)/` group inside an existing
+  // hierarchical role. Prompts for tab count (2–5) + names.
+  if (argv[0] === "add" && argv[1] === "bottom-tab") {
+    const { addBottomTab } = await import("./commands/bottomTab.js");
+    await addBottomTab(argv[2]);
+    return;
+  }
+  // `add screen` — arity dispatch:
+  //   2 args (`add screen <feature> <name>`)         → flat screen
+  //   3 args (`add screen <role> <feature> <name>`)  → nested screen
   if (argv[0] === "add" && argv[1] === "screen") {
-    const { addScreen } = await import("./commands/screen.js");
-    await addScreen(argv[2], argv[3], argv[4]);
+    if (argv[4]) {
+      const { addScreen } = await import("./commands/screen.js");
+      await addScreen(argv[2], argv[3], argv[4]);
+    } else {
+      const { addFlatScreen } = await import("./commands/flatScreen.js");
+      await addFlatScreen(argv[2], argv[3]);
+    }
     return;
   }
   if (argv[0] === "add") {
@@ -139,6 +165,7 @@ async function main(): Promise<void> {
   patchAppJsonAssetPaths(target.dir);
   patchExpoRouterEntry(target.dir);
   patchAppJsonPlugins(target.dir, answers);
+  patchAppJsonBuildProperties(target.dir);
 
   log.step("Splicing constants + layout sentinels …");
   patchConstants(target.dir, templatesRoot, answers);

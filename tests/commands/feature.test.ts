@@ -28,7 +28,7 @@ function seedExpoApp(t: string): void {
 
 async function seedRole(t: string): Promise<void> {
   seedExpoApp(t);
-  await addRole("auth", {
+  await addRole("customer", {
     target: t,
     promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
   });
@@ -39,44 +39,44 @@ describe("addFeature", () => {
     const t = mkTmp();
     await seedRole(t);
 
-    await addFeature("auth", "profile", {
+    await addFeature("customer", "profile", {
       target: t,
       promptInputs: async () => ({ screen: "edit", makeInitial: false }),
     });
 
-    expect(fs.existsSync(path.join(t, "src/features/auth/profile/types.ts"))).toBe(
+    expect(fs.existsSync(path.join(t, "src/features/customer/profile/types.ts"))).toBe(
       true,
     );
     expect(
-      fs.existsSync(path.join(t, "src/features/auth/profile/edit/index.tsx")),
+      fs.existsSync(path.join(t, "src/features/customer/profile/edit/index.tsx")),
     ).toBe(true);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/edit.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/edit.tsx"))).toBe(true);
 
     // Redirect untouched (makeInitial=false).
     expect(
-      fs.readFileSync(path.join(t, "src/app/(auth)/index.tsx"), "utf8"),
-    ).toContain('<Redirect href="/(auth)/onBoarding" />');
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/onBoarding" />');
   });
 
   it("rewrites redirect when makeInitial=true", async () => {
     const t = mkTmp();
     await seedRole(t);
 
-    await addFeature("auth", "profile", {
+    await addFeature("customer", "profile", {
       target: t,
       promptInputs: async () => ({ screen: "edit", makeInitial: true }),
     });
 
     expect(
-      fs.readFileSync(path.join(t, "src/app/(auth)/index.tsx"), "utf8"),
-    ).toContain('<Redirect href="/(auth)/edit" />');
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/edit" />');
   });
 
   it("refuses when role does not exist", async () => {
     const t = mkTmp();
     seedExpoApp(t);
     await expect(
-      addFeature("auth", "profile", {
+      addFeature("customer", "profile", {
         target: t,
         promptInputs: async () => ({ screen: "edit", makeInitial: false }),
       }),
@@ -87,7 +87,7 @@ describe("addFeature", () => {
     const t = mkTmp();
     await seedRole(t);
     await expect(
-      addFeature("auth", "dashboard", {
+      addFeature("customer", "dashboard", {
         target: t,
         promptInputs: async () => ({ screen: "extra", makeInitial: false }),
       }),
@@ -98,30 +98,30 @@ describe("addFeature", () => {
     const t = mkTmp();
     await seedRole(t);
     await expect(
-      addFeature("auth", "profile", {
+      addFeature("customer", "profile", {
         target: t,
         promptInputs: async () => ({ screen: "onBoarding", makeInitial: false }),
       }),
     ).rejects.toThrow(/already exists/i);
     // Profile feature was NOT created (pre-flight refusal).
-    expect(fs.existsSync(path.join(t, "src/features/auth/profile"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/features/customer/profile"))).toBe(false);
   });
 
   it("rollback: late failure removes the just-created feature", async () => {
     const t = mkTmp();
     await seedRole(t);
     await expect(
-      addFeature("auth", "profile", {
+      addFeature("customer", "profile", {
         target: t,
         promptInputs: async () => ({ screen: "edit", makeInitial: true }),
         _failAfterWrites: true,
       }),
     ).rejects.toThrow(/_failAfterWrites/);
-    expect(fs.existsSync(path.join(t, "src/features/auth/profile"))).toBe(false);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/edit.tsx"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/features/customer/profile"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/edit.tsx"))).toBe(false);
     // Redirect remains at original onBoarding target (rollback restored).
     expect(
-      fs.readFileSync(path.join(t, "src/app/(auth)/index.tsx"), "utf8"),
-    ).toContain('<Redirect href="/(auth)/onBoarding" />');
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/onBoarding" />');
   });
 });

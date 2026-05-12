@@ -187,6 +187,43 @@ export function patchAppJsonPlugins(target: string, answers: Answers): void {
   writeJson(p, json);
 }
 
+/**
+ * Pin iOS / Android native build properties at prebuild time via the
+ * `expo-build-properties` config plugin.
+ *
+ * Why: CocoaPods (Xcode 26+ toolchain) emits a deployment-version-mismatch
+ * warning when a transitive pod declares an older iOS minimum than the
+ * project's effective target. `expo-image` (always installed — see
+ * `buildAlwaysInstalledList`) pulls `SDWebImage` 5.x, whose podspec declares
+ * `platform :ios, '9.0'`, well below the Expo SDK 54 default of 15.1. Setting
+ * `ios.deploymentTarget` here makes `expo prebuild` emit a Podfile that
+ * normalizes every pod to the same minimum, silencing the warning.
+ *
+ * Values:
+ * - `ios.deploymentTarget: "15.1"` — matches Expo SDK 54's default. Explicit
+ *   so the value is stable across SDK bumps (and visible in app.json review).
+ * - `android.minSdkVersion: 24` — also Expo SDK 54 default; pinned for parity.
+ *
+ * Idempotent via `nameOf` equality (preserves a user-customized entry).
+ */
+export function patchAppJsonBuildProperties(target: string): void {
+  const p = path.join(target, "app.json");
+  const json = readJson<ExpoAppJson>(p);
+  json.expo ??= {};
+  json.expo.plugins ??= [];
+  const entry: [string, Record<string, unknown>] = [
+    "expo-build-properties",
+    {
+      ios: { deploymentTarget: "15.1" },
+      android: { minSdkVersion: 24 },
+    },
+  ];
+  if (!json.expo.plugins.some((e) => nameOf(e) === nameOf(entry))) {
+    json.expo.plugins.push(entry);
+  }
+  writeJson(p, json);
+}
+
 // ---------- expo-router entry + tsconfig.extends ----------
 
 /**

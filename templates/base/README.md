@@ -78,11 +78,23 @@ Rebuild after each recipe:
 
 ### Generate role / feature / screen
 
+Two layout shapes, dispatched by argument arity:
+
 ```bash
-codingpixel-expo add role <role>             # prompts feature + screen
-codingpixel-expo add feature <role> <name>   # prompts screen + initial?
-codingpixel-expo add screen <role> <feature> <name>   # prompts initial?
+# Hierarchical role → feature → screen (3 levels)
+codingpixel-expo-app add role <role>                       # prompts feature + screen
+codingpixel-expo-app add feature <role> <name>             # prompts screen + initial?
+codingpixel-expo-app add screen <role> <feature> <name>    # prompts initial?
+
+# Standalone feature → screen (2 levels, flat; for auth-style namespaces)
+codingpixel-expo-app add feature <name>                    # prompts first screen
+codingpixel-expo-app add screen <feature> <name>           # prompts initial?
+
+# Bottom tabs inside a hierarchical role
+codingpixel-expo-app add bottom-tab <role>                 # prompts tab count (2–5) + names
 ```
+
+`add role auth` is refused — use `add feature auth` instead (auth is a standalone feature).
 
 Names are normalized to `camelCase`. ViewModels and components use `PascalCase`. Atomic: rolls back on failure.
 

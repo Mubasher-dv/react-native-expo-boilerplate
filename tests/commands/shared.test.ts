@@ -192,7 +192,117 @@ describe("existence checks", () => {
   });
 });
 
-import { readRouteFileFeatureOwner } from "../../src/commands/shared.js";
+import {
+  assertNotRoleRefusal,
+  buildFlatScreenReExport,
+  flatScreenDir,
+  flatViewModelDir,
+  isStandaloneFeature,
+  readFlatRouteFileFeatureOwner,
+  readRouteFileFeatureOwner,
+  ROLE_REFUSAL_HINTS,
+  standaloneFeatureExists,
+  topLevelNameTaken,
+} from "../../src/commands/shared.js";
+
+describe("ROLE_REFUSAL_HINTS / assertNotRoleRefusal", () => {
+  it("rejects `auth` with the documented hint", () => {
+    expect(() => assertNotRoleRefusal("auth")).toThrow(
+      /should be a feature.*add feature auth/i,
+    );
+  });
+
+  it("is case-insensitive against the normalized form", () => {
+    expect(() => assertNotRoleRefusal("Auth")).toThrow(/should be a feature/i);
+    expect(() => assertNotRoleRefusal("AUTH")).toThrow(/should be a feature/i);
+  });
+
+  it("does not reject other role names", () => {
+    expect(() => assertNotRoleRefusal("customer")).not.toThrow();
+    expect(() => assertNotRoleRefusal("merchant")).not.toThrow();
+  });
+
+  it("ROLE_REFUSAL_HINTS contains the documented initial entry", () => {
+    expect(ROLE_REFUSAL_HINTS).toHaveProperty("auth");
+    expect(ROLE_REFUSAL_HINTS.auth).toMatch(/add feature auth/i);
+  });
+});
+
+describe("isStandaloneFeature / standaloneFeatureExists / topLevelNameTaken", () => {
+  it("isStandaloneFeature: true only when route group dir is present", () => {
+    const t = mkTmp();
+    expect(isStandaloneFeature(t, "auth")).toBe(false);
+    fs.mkdirSync(path.join(t, "src/app/(auth)"), { recursive: true });
+    expect(isStandaloneFeature(t, "auth")).toBe(true);
+  });
+
+  it("standaloneFeatureExists: true only when BOTH features dir AND route group present", () => {
+    const t = mkTmp();
+    expect(standaloneFeatureExists(t, "auth")).toBe(false);
+    fs.mkdirSync(path.join(t, "src/features/auth"), { recursive: true });
+    expect(standaloneFeatureExists(t, "auth")).toBe(false);
+    fs.mkdirSync(path.join(t, "src/app/(auth)"), { recursive: true });
+    expect(standaloneFeatureExists(t, "auth")).toBe(true);
+  });
+
+  it("topLevelNameTaken: returns kinds 'role', 'groupOnly', 'featuresOnly', or null", () => {
+    const t = mkTmp();
+    expect(topLevelNameTaken(t, "x")).toBeNull();
+
+    fs.mkdirSync(path.join(t, "src/app/(x)"), { recursive: true });
+    expect(topLevelNameTaken(t, "x")).toEqual({ kind: "groupOnly" });
+
+    fs.mkdirSync(path.join(t, "src/features/x"), { recursive: true });
+    expect(topLevelNameTaken(t, "x")).toEqual({ kind: "role" });
+
+    const t2 = mkTmp();
+    fs.mkdirSync(path.join(t2, "src/features/y"), { recursive: true });
+    expect(topLevelNameTaken(t2, "y")).toEqual({ kind: "featuresOnly" });
+  });
+});
+
+describe("flat path helpers", () => {
+  it("flatScreenDir / flatViewModelDir compute 2-segment paths", () => {
+    const t = "/tmp/proj";
+    expect(flatScreenDir(t, "auth", "login")).toBe(
+      path.join(t, "src/features/auth/login"),
+    );
+    expect(flatViewModelDir(t, "auth", "login")).toBe(
+      path.join(t, "src/features/auth/login/viewModel"),
+    );
+  });
+});
+
+describe("buildFlatScreenReExport", () => {
+  it("emits a 2-segment @features/<feature>/<screen> import", () => {
+    expect(buildFlatScreenReExport("auth", "login").trim()).toBe(
+      'export { default } from "@features/auth/login";',
+    );
+  });
+});
+
+describe("readFlatRouteFileFeatureOwner", () => {
+  it("extracts owner from a 2-segment flat re-export", () => {
+    const t = mkTmp();
+    fs.mkdirSync(path.join(t, "src/app/(auth)"), { recursive: true });
+    fs.writeFileSync(
+      path.join(t, "src/app/(auth)/signUp.tsx"),
+      'export { default } from "@features/auth/signUp";\n',
+    );
+    expect(readFlatRouteFileFeatureOwner(t, "auth", "signUp")).toBe("auth");
+  });
+
+  it("returns null when the file is missing or shape is unfamiliar", () => {
+    const t = mkTmp();
+    expect(readFlatRouteFileFeatureOwner(t, "auth", "signUp")).toBeNull();
+    fs.mkdirSync(path.join(t, "src/app/(auth)"), { recursive: true });
+    fs.writeFileSync(
+      path.join(t, "src/app/(auth)/signUp.tsx"),
+      "// hand-edited\n",
+    );
+    expect(readFlatRouteFileFeatureOwner(t, "auth", "signUp")).toBeNull();
+  });
+});
 
 describe("readRouteFileFeatureOwner", () => {
   it("extracts the feature segment from a standard re-export", () => {
@@ -379,7 +489,56 @@ describe("template builders", () => {
   });
 });
 
-import { writeFeatureTypes, writeScreenFiles } from "../../src/commands/shared.js";
+import {
+  writeFeatureTypes,
+  writeFlatRouteReExport,
+  writeFlatScreenFiles,
+  writeScreenFiles,
+  writeStandaloneFeatureTypes,
+} from "../../src/commands/shared.js";
+
+describe("writeStandaloneFeatureTypes", () => {
+  it("writes features/<feature>/types.ts at the feature root", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    const out = writeStandaloneFeatureTypes(t, "auth", j);
+    expect(out).toBe(path.join(t, "src/features/auth/types.ts"));
+    expect(fs.existsSync(out)).toBe(true);
+    expect(fs.readFileSync(out, "utf8")).toContain("auth");
+    expect(j.created).toContain(out);
+  });
+});
+
+describe("writeFlatScreenFiles", () => {
+  it("writes the 3 screen files at features/<feature>/<screen>/", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    const paths = writeFlatScreenFiles(t, "auth", "login", j);
+    expect(paths).toEqual([
+      path.join(t, "src/features/auth/login/index.tsx"),
+      path.join(t, "src/features/auth/login/viewModel/_api.ts"),
+      path.join(t, "src/features/auth/login/viewModel/useLoginViewModel.tsx"),
+    ]);
+    for (const p of paths) {
+      expect(fs.existsSync(p)).toBe(true);
+      expect(j.created).toContain(p);
+    }
+  });
+});
+
+describe("writeFlatRouteReExport", () => {
+  it("writes the flat (2-segment) re-export at src/app/(<feature>)/<screen>.tsx", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    const out = writeFlatRouteReExport(t, "auth", "login", j);
+    expect(out).toBe(path.join(t, "src/app/(auth)/login.tsx"));
+    expect(fs.readFileSync(out, "utf8")).toBe(
+      'export { default } from "@features/auth/login";\n',
+    );
+    expect(j.created).toContain(out);
+  });
+});
+
 
 describe("writeFeatureTypes", () => {
   it("creates features/<role>/<feature>/types.ts and records it", () => {
@@ -604,5 +763,258 @@ describe("assertExpoApp", () => {
 describe("printRebuildReminder", () => {
   it("does not throw; emits a message to stdout", () => {
     expect(() => printRebuildReminder()).not.toThrow();
+  });
+});
+
+import {
+  assertRoleLayoutParseable,
+  buildTabPlaceholder,
+  buildTabsIndexRedirect,
+  buildTabsLayout,
+  registerTabsInRoleLayout,
+  tabRouteFile,
+  tabsGroupDir,
+  tabsGroupExists,
+  tabsIndexFile,
+  tabsLayoutFile,
+  writeTabsGroup,
+} from "../../src/commands/shared.js";
+
+describe("tabs path helpers", () => {
+  it("compute expected paths under (role)/(tabs)/", () => {
+    const t = "/tmp/proj";
+    expect(tabsGroupDir(t, "customer")).toBe(
+      path.join(t, "src/app/(customer)/(tabs)"),
+    );
+    expect(tabsLayoutFile(t, "customer")).toBe(
+      path.join(t, "src/app/(customer)/(tabs)/_layout.tsx"),
+    );
+    expect(tabsIndexFile(t, "customer")).toBe(
+      path.join(t, "src/app/(customer)/(tabs)/index.tsx"),
+    );
+    expect(tabRouteFile(t, "customer", "home")).toBe(
+      path.join(t, "src/app/(customer)/(tabs)/home.tsx"),
+    );
+  });
+
+  it("tabsGroupExists detects the directory", () => {
+    const t = mkTmp();
+    expect(tabsGroupExists(t, "customer")).toBe(false);
+    fs.mkdirSync(path.join(t, "src/app/(customer)/(tabs)"), { recursive: true });
+    expect(tabsGroupExists(t, "customer")).toBe(true);
+  });
+});
+
+describe("buildTabsLayout / buildTabsIndexRedirect / buildTabPlaceholder", () => {
+  it("buildTabsLayout renders <RolePascal>TabsLayout with one Tabs.Screen per tab", () => {
+    const out = buildTabsLayout("customer", ["home", "bookings", "profile"]);
+    expect(out).toContain("export default function CustomerTabsLayout()");
+    expect(out).toContain('<Tabs screenOptions={{ headerShown: false }}>');
+    expect(out).toContain('name="home"');
+    expect(out).toContain('title: "Home"');
+    expect(out).toContain('name="bookings"');
+    expect(out).toContain('title: "Bookings"');
+    expect(out).toContain('name="profile"');
+    expect(out).toContain('Ionicons name="ellipse-outline"');
+    expect(out).toContain('import { Tabs } from "expo-router"');
+    expect(out).toContain('import { Ionicons } from "@expo/vector-icons"');
+  });
+
+  it("buildTabsLayout hides (tabs)/index.tsx via `href: null` so it doesn't render as a phantom tab", () => {
+    // Expo Router's <Tabs> auto-discovers every file in the directory. Without
+    // this hidden entry, `(tabs)/index.tsx` (the redirect file) would appear
+    // as a 4th tab in a 3-tab setup. Regression guard for advisor finding.
+    const out = buildTabsLayout("customer", ["home", "bookings", "profile"]);
+    expect(out).toContain('name="index"');
+    expect(out).toContain("options={{ href: null }}");
+    // Hidden index entry must come BEFORE the first visible tab so ordering
+    // in `_layout.tsx` matches the user-entered tab order.
+    const idxAt = out.indexOf('name="index"');
+    const homeAt = out.indexOf('name="home"');
+    expect(idxAt).toBeGreaterThan(-1);
+    expect(homeAt).toBeGreaterThan(idxAt);
+  });
+
+  it("buildTabsIndexRedirect points at the first tab", () => {
+    const out = buildTabsIndexRedirect("customer", "home");
+    expect(out).toContain("export default function CustomerTabsIndex()");
+    expect(out).toContain('<Redirect href="/(customer)/(tabs)/home" />');
+  });
+
+  it("buildTabPlaceholder renders an inline AppWrapper + AppText body", () => {
+    const out = buildTabPlaceholder("home");
+    expect(out).toContain("export default function Home()");
+    expect(out).toContain("AppWrapper");
+    expect(out).toContain("AppText");
+    expect(out).toContain("Home screen");
+  });
+});
+
+describe("writeTabsGroup", () => {
+  it("writes _layout, index, and one file per tab; records all creates", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    const out = writeTabsGroup(t, "customer", ["home", "profile"], j);
+    expect(out).toEqual([
+      path.join(t, "src/app/(customer)/(tabs)/_layout.tsx"),
+      path.join(t, "src/app/(customer)/(tabs)/index.tsx"),
+      path.join(t, "src/app/(customer)/(tabs)/home.tsx"),
+      path.join(t, "src/app/(customer)/(tabs)/profile.tsx"),
+    ]);
+    for (const p of out) {
+      expect(fs.existsSync(p)).toBe(true);
+      expect(j.created).toContain(p);
+    }
+  });
+
+  it("throws on empty tab list", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    expect(() => writeTabsGroup(t, "customer", [], j)).toThrow(/empty/i);
+  });
+});
+
+describe("assertRoleLayoutParseable", () => {
+  function seedRoleLayout(t: string, role: string, content: string): void {
+    const dir = path.join(t, `src/app/(${role})`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "_layout.tsx"), content);
+  }
+
+  it("accepts self-closing Stack", () => {
+    const t = mkTmp();
+    seedRoleLayout(
+      t,
+      "customer",
+      'import { Stack } from "expo-router";\n' +
+        "export default function CustomerLayout() {\n" +
+        "  return <Stack screenOptions={{ headerShown: false }} />;\n" +
+        "}\n",
+    );
+    expect(() => assertRoleLayoutParseable(t, "customer")).not.toThrow();
+  });
+
+  it("accepts wrapping Stack", () => {
+    const t = mkTmp();
+    seedRoleLayout(
+      t,
+      "customer",
+      'import { Stack } from "expo-router";\n' +
+        "export default function CustomerLayout() {\n" +
+        "  return (\n" +
+        "    <Stack screenOptions={{ headerShown: false }}>\n" +
+        '      <Stack.Screen name="home" />\n' +
+        "    </Stack>\n" +
+        "  );\n" +
+        "}\n",
+    );
+    expect(() => assertRoleLayoutParseable(t, "customer")).not.toThrow();
+  });
+
+  it("throws when layout file is missing", () => {
+    const t = mkTmp();
+    expect(() => assertRoleLayoutParseable(t, "customer")).toThrow(/not found/i);
+  });
+
+  it("throws when Stack tag pattern is absent", () => {
+    const t = mkTmp();
+    seedRoleLayout(t, "customer", "// no stack\n");
+    expect(() => assertRoleLayoutParseable(t, "customer")).toThrow(/expected shape/i);
+  });
+});
+
+describe("registerTabsInRoleLayout", () => {
+  function seedRoleLayout(t: string, role: string, content: string): string {
+    const dir = path.join(t, `src/app/(${role})`);
+    fs.mkdirSync(dir, { recursive: true });
+    const f = path.join(dir, "_layout.tsx");
+    fs.writeFileSync(f, content);
+    return f;
+  }
+
+  it("converts self-closing Stack into wrapping form with <Stack.Screen name=\"(tabs)\" /> child", () => {
+    const t = mkTmp();
+    const f = seedRoleLayout(
+      t,
+      "customer",
+      'import { Stack } from "expo-router";\n' +
+        "\n" +
+        "export default function CustomerLayout() {\n" +
+        "  return <Stack screenOptions={{ headerShown: false }} />;\n" +
+        "}\n",
+    );
+    const j = newJournal();
+    const out = registerTabsInRoleLayout(t, "customer", j);
+    expect(out).toBe(f);
+    const after = fs.readFileSync(f, "utf8");
+    expect(after).toContain('<Stack.Screen name="(tabs)" />');
+    expect(after).toContain("</Stack>");
+    expect(after).not.toContain("<Stack screenOptions={{ headerShown: false }} />");
+    expect(j.edited).toHaveLength(1);
+    // Locked-in shape: cleanly-indented multi-line block (regression guard
+    // for an earlier bug where indent derivation treated `return ` as
+    // leading whitespace and produced `return   <Stack.Screen ...`).
+    expect(after).toContain(
+      "  return (\n" +
+        "    <Stack screenOptions={{ headerShown: false }}>\n" +
+        '      <Stack.Screen name="(tabs)" />\n' +
+        "    </Stack>\n" +
+        "  );",
+    );
+    // No literal "return   <" artifact.
+    expect(after).not.toMatch(/return\s{2,}</);
+  });
+
+  it("appends child to a wrapping-form Stack and preserves existing children", () => {
+    const t = mkTmp();
+    const f = seedRoleLayout(
+      t,
+      "customer",
+      'import { Stack } from "expo-router";\n' +
+        "\n" +
+        "export default function CustomerLayout() {\n" +
+        "  return (\n" +
+        "    <Stack screenOptions={{ headerShown: false }}>\n" +
+        '      <Stack.Screen name="home" />\n' +
+        "    </Stack>\n" +
+        "  );\n" +
+        "}\n",
+    );
+    const j = newJournal();
+    const out = registerTabsInRoleLayout(t, "customer", j);
+    expect(out).toBe(f);
+    const after = fs.readFileSync(f, "utf8");
+    expect(after).toContain('<Stack.Screen name="home" />');
+    expect(after).toContain('<Stack.Screen name="(tabs)" />');
+  });
+
+  it("is idempotent — second call returns null and leaves the file unchanged", () => {
+    const t = mkTmp();
+    const f = seedRoleLayout(
+      t,
+      "customer",
+      'import { Stack } from "expo-router";\n' +
+        "\n" +
+        "export default function CustomerLayout() {\n" +
+        "  return (\n" +
+        "    <Stack screenOptions={{ headerShown: false }}>\n" +
+        '      <Stack.Screen name="(tabs)" />\n' +
+        "    </Stack>\n" +
+        "  );\n" +
+        "}\n",
+    );
+    const j = newJournal();
+    const out = registerTabsInRoleLayout(t, "customer", j);
+    expect(out).toBeNull();
+    expect(j.edited).toEqual([]);
+    const after = fs.readFileSync(f, "utf8");
+    expect(after.match(/<Stack\.Screen name="\(tabs\)" \/>/g)?.length).toBe(1);
+  });
+});
+
+describe("RESERVED_NAMES additions", () => {
+  it("contains bottom-tab + tabs", () => {
+    expect(RESERVED_NAMES).toContain("bottom-tab");
+    expect(RESERVED_NAMES).toContain("tabs");
   });
 });

@@ -29,7 +29,7 @@ function seedExpoApp(t: string): void {
 
 async function seedFeature(t: string): Promise<void> {
   seedExpoApp(t);
-  await addRole("auth", {
+  await addRole("customer", {
     target: t,
     promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
   });
@@ -40,25 +40,25 @@ describe("addScreen", () => {
     const t = mkTmp();
     await seedFeature(t);
 
-    await addScreen("auth", "dashboard", "teamDetails", {
+    await addScreen("customer", "dashboard", "teamDetails", {
       target: t,
       promptInputs: async () => ({ makeInitial: false }),
     });
 
     expect(
       fs.existsSync(
-        path.join(t, "src/features/auth/dashboard/teamDetails/index.tsx"),
+        path.join(t, "src/features/customer/dashboard/teamDetails/index.tsx"),
       ),
     ).toBe(true);
     expect(
       fs.existsSync(
         path.join(
           t,
-          "src/features/auth/dashboard/teamDetails/viewModel/useTeamDetailsViewModel.tsx",
+          "src/features/customer/dashboard/teamDetails/viewModel/useTeamDetailsViewModel.tsx",
         ),
       ),
     ).toBe(true);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/teamDetails.tsx"))).toBe(
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/teamDetails.tsx"))).toBe(
       true,
     );
   });
@@ -66,20 +66,20 @@ describe("addScreen", () => {
   it("rewrites redirect when makeInitial=true", async () => {
     const t = mkTmp();
     await seedFeature(t);
-    await addScreen("auth", "dashboard", "teamDetails", {
+    await addScreen("customer", "dashboard", "teamDetails", {
       target: t,
       promptInputs: async () => ({ makeInitial: true }),
     });
     expect(
-      fs.readFileSync(path.join(t, "src/app/(auth)/index.tsx"), "utf8"),
-    ).toContain('<Redirect href="/(auth)/teamDetails" />');
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/teamDetails" />');
   });
 
   it("refuses when feature does not exist", async () => {
     const t = mkTmp();
     seedExpoApp(t);
     await expect(
-      addScreen("auth", "dashboard", "teamDetails", {
+      addScreen("customer", "dashboard", "teamDetails", {
         target: t,
         promptInputs: async () => ({ makeInitial: false }),
       }),
@@ -90,7 +90,7 @@ describe("addScreen", () => {
     const t = mkTmp();
     await seedFeature(t);
     await expect(
-      addScreen("auth", "dashboard", "onBoarding", {
+      addScreen("customer", "dashboard", "onBoarding", {
         target: t,
         promptInputs: async () => ({ makeInitial: false }),
       }),
@@ -100,14 +100,14 @@ describe("addScreen", () => {
   it("refuses on route-file collision across features (names route file + owning feature)", async () => {
     const t = mkTmp();
     await seedFeature(t);
-    await addFeature("auth", "profile", {
+    await addFeature("customer", "profile", {
       target: t,
       promptInputs: async () => ({ screen: "settings", makeInitial: false }),
     });
     // Now try to add `settings` under `dashboard` — collides with profile/settings's route file.
     let caught: Error | undefined;
     try {
-      await addScreen("auth", "dashboard", "settings", {
+      await addScreen("customer", "dashboard", "settings", {
         target: t,
         promptInputs: async () => ({ makeInitial: false }),
       });
@@ -117,28 +117,28 @@ describe("addScreen", () => {
     expect(caught).toBeDefined();
     // Spec § screen step 4: error names the existing route file AND its feature.
     expect(caught!.message).toMatch(/already exists/i);
-    expect(caught!.message).toContain("src/app/(auth)/settings.tsx");
-    expect(caught!.message).toContain("auth/profile");
+    expect(caught!.message).toContain("src/app/(customer)/settings.tsx");
+    expect(caught!.message).toContain("customer/profile");
   });
 
   it("rollback: late failure leaves filesystem unchanged", async () => {
     const t = mkTmp();
     await seedFeature(t);
     await expect(
-      addScreen("auth", "dashboard", "teamDetails", {
+      addScreen("customer", "dashboard", "teamDetails", {
         target: t,
         promptInputs: async () => ({ makeInitial: true }),
         _failAfterWrites: true,
       }),
     ).rejects.toThrow(/_failAfterWrites/);
     expect(
-      fs.existsSync(path.join(t, "src/features/auth/dashboard/teamDetails")),
+      fs.existsSync(path.join(t, "src/features/customer/dashboard/teamDetails")),
     ).toBe(false);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/teamDetails.tsx"))).toBe(
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/teamDetails.tsx"))).toBe(
       false,
     );
     expect(
-      fs.readFileSync(path.join(t, "src/app/(auth)/index.tsx"), "utf8"),
-    ).toContain('<Redirect href="/(auth)/onBoarding" />');
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/onBoarding" />');
   });
 });

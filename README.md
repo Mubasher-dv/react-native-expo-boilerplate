@@ -129,39 +129,74 @@ After the recipe completes, the CLI prints rebuild commands tailored to whether 
 
 Scaffold the navigation/feature layout in an already-scaffolded project.
 
-#### `add role <name>`
+The CLI supports two layout shapes:
+
+- **Hierarchical** — `role → feature → screen` (3 levels). Use for namespaces with multiple sub-modules (e.g. `customer/dashboard/home`, `customer/profile/edit`).
+- **Standalone feature** — `feature → screen` (2 levels, flat). Use for tightly-scoped namespaces where each screen is independent (e.g. `auth/login`, `auth/signUp`, `auth/forgotPassword`). Owns its own Expo Router group.
+
+Commands dispatch on argument arity — no flags.
+
+#### `add role <name>` (hierarchical)
 
 Creates an Expo Router group, the feature root, and one starter screen.
 
 ```bash
-codingpixel-expo add role auth
+codingpixel-expo-app add role customer
 # prompts: First feature name? dashboard
-# prompts: First screen name?  onBoarding
+# prompts: First screen name?  home
 ```
 
 Produces:
 
 ```
-src/features/auth/dashboard/
+src/features/customer/dashboard/
   types.ts
-  onBoarding/
+  home/
     index.tsx
     viewModel/_api.ts
-    viewModel/useOnBoardingViewModel.tsx
-src/app/(auth)/
+    viewModel/useHomeViewModel.tsx
+src/app/(customer)/
   _layout.tsx     # empty <Stack headerShown:false />
-  index.tsx       # <Redirect href="/(auth)/onBoarding" />
-  onBoarding.tsx  # re-export from @features/auth/dashboard/onBoarding
+  index.tsx       # <Redirect href="/(customer)/home" />
+  home.tsx        # re-export from @features/customer/dashboard/home
+```
+
+Also registers `<Stack.Screen name="(customer)" />` in `src/app/routes.tsx`.
+
+> `add role auth` is refused with a hint to use `add feature auth` — `auth` should be a standalone feature, not a role.
+
+#### `add feature <name>` (1-arg, standalone)
+
+Creates a standalone flat feature with its own route group and a starter screen.
+
+```bash
+codingpixel-expo-app add feature auth
+# prompts: First screen name? login
+```
+
+Produces:
+
+```
+src/features/auth/
+  types.ts
+  login/
+    index.tsx
+    viewModel/_api.ts
+    viewModel/useLoginViewModel.tsx
+src/app/(auth)/
+  _layout.tsx
+  index.tsx       # <Redirect href="/(auth)/login" />
+  login.tsx       # re-export from @features/auth/login (2-segment)
 ```
 
 Also registers `<Stack.Screen name="(auth)" />` in `src/app/routes.tsx`.
 
-#### `add feature <role> <name>`
+#### `add feature <role> <name>` (2-arg, nested)
 
-Adds a sibling feature under an existing role.
+Adds a sibling feature under an existing hierarchical role.
 
 ```bash
-codingpixel-expo add feature auth profile
+codingpixel-expo-app add feature customer profile
 # prompts: Screen name?            edit
 # prompts: Make initial screen?    no
 ```
@@ -170,16 +205,58 @@ Refuses if the role does not exist or the feature already exists. Refuses if the
 
 If you answer "yes" to the initial-screen prompt, the redirect in `src/app/(<role>)/index.tsx` is rewritten to point at the new screen.
 
-#### `add screen <role> <feature> <name>`
+#### `add screen <feature> <name>` (2-arg, flat)
 
-Adds a sibling screen to an existing feature.
+Adds a sibling screen to an existing standalone feature.
 
 ```bash
-codingpixel-expo add screen auth dashboard teamDetails
+codingpixel-expo-app add screen auth signUp
+# prompts: Make initial screen? no
+```
+
+Refuses if the feature is not a standalone feature, the screen already exists, or the screen name collides with an existing route file in the feature's route group.
+
+#### `add screen <role> <feature> <name>` (3-arg, nested)
+
+Adds a sibling screen to a nested feature under a hierarchical role.
+
+```bash
+codingpixel-expo-app add screen customer dashboard teamDetails
 # prompts: Make initial screen? no
 ```
 
 Refuses if the role or feature does not exist, the screen already exists, or the screen name collides with an existing route file in the role.
+
+#### `add bottom-tab <role>` (hierarchical only)
+
+Scaffolds an Expo Router `(tabs)/` group inside an existing hierarchical role.
+
+```bash
+codingpixel-expo-app add bottom-tab customer
+# prompts: How many bottom tabs? (2–5) 3
+# prompts: Tab #1 name? home
+# prompts: Tab #2 name? bookings
+# prompts: Tab #3 name? profile
+```
+
+Produces:
+
+```
+src/app/(customer)/(tabs)/
+  _layout.tsx                    # <Tabs> with <Tabs.Screen> per tab + Ionicons placeholder icons
+  index.tsx                      # <Redirect href="/(customer)/(tabs)/home" />
+  home.tsx                       # inline placeholder (AppWrapper + AppText)
+  bookings.tsx
+  profile.tsx
+```
+
+Also patches `src/app/(customer)/_layout.tsx` to add `<Stack.Screen name="(tabs)" />` (converts self-closing Stack to wrapping form if needed; appends idempotently otherwise).
+
+Tabs are reachable via programmatic navigation to `/(customer)/(tabs)`. The outer `(customer)/index.tsx` redirect (from `add role`) is left untouched — call `router.replace("/(customer)/(tabs)")` from the role's landing screen when ready to enter tabs.
+
+Refuses when the role does not exist or is a standalone feature, when `(tabs)/` already exists, when the role layout is malformed, when tab count is outside 2–5, when tab names duplicate within the batch, or when a tab name hits the reserved list.
+
+Swap placeholder Ionicons in `(tabs)/_layout.tsx` afterwards.
 
 #### Naming
 
