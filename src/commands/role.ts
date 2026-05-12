@@ -17,6 +17,7 @@ import {
   roleExists,
   routeFileExists,
   rollback,
+  setRootIndexRedirect,
   topLevelNameTaken,
   writeFeatureTypes,
   writeRoleGroup,
@@ -28,12 +29,25 @@ export type AddRoleOptions = {
   /** Target project root. Defaults to `process.cwd()`. */
   target?: string;
   /** Override the prompts step (test injection). Defaults to the real prompts call. */
-  promptInputs?: () => Promise<{ feature: string; screen: string }>;
+  promptInputs?: () => Promise<{
+    feature: string;
+    screen: string;
+    /**
+     * If true, `src/app/index.tsx` gets rewritten to `<Redirect href="/(role)" />`
+     * so the app lands on this role on launch. Default false — root index
+     * left untouched.
+     */
+    makeRootInitial?: boolean;
+  }>;
   /** Test-only: throw after writes are recorded but before the routes splice. */
   _failAfterWrites?: boolean;
 };
 
-async function promptViaPrompts(): Promise<{ feature: string; screen: string }> {
+async function promptViaPrompts(): Promise<{
+  feature: string;
+  screen: string;
+  makeRootInitial: boolean;
+}> {
   const a = await prompts(
     [
       {
@@ -48,10 +62,22 @@ async function promptViaPrompts(): Promise<{ feature: string; screen: string }> 
         message: "First screen name?",
         validate: (v: string) => (v.trim() === "" ? "Required" : true),
       },
+      {
+        type: "toggle",
+        name: "makeRootInitial",
+        message: "Make this role the app's initial route (rewrite src/app/index.tsx)?",
+        initial: false,
+        active: "yes",
+        inactive: "no",
+      },
     ],
     { onCancel: () => process.exit(1) },
   );
-  return { feature: a.feature, screen: a.screen };
+  return {
+    feature: a.feature,
+    screen: a.screen,
+    makeRootInitial: !!a.makeRootInitial,
+  };
 }
 
 export async function addRole(
@@ -124,6 +150,12 @@ export async function addRole(
     // 8. routes.tsx splice
     const routesPath = registerRoleInRoutes(target, role, j);
     if (routesPath) written.push(routesPath);
+
+    // 9. optional root index redirect — `src/app/index.tsx` → /(role)
+    if (inputs.makeRootInitial) {
+      const rootPath = setRootIndexRedirect(target, role, j);
+      if (rootPath) written.push(rootPath);
+    }
   } catch (err) {
     log.error(`add role failed — rolling back changes`);
     await rollback(j);

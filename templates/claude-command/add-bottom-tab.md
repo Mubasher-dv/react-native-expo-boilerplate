@@ -19,7 +19,9 @@ Refuses when:
 - Tab count is outside 2–5.
 - Tab names duplicate within the batch or hit the reserved list.
 
-Tabs are reachable via programmatic navigation to `/(<role>)/(tabs)`; the outer `(<role>)/index.tsx` redirect is left untouched. Replace placeholder icons in `(tabs)/_layout.tsx` afterwards.
+A final prompt asks whether to make tabs the role's landing destination. Answering yes rewrites `(<role>)/index.tsx` redirect to `/(<role>)/(tabs)`, wiring the full chain when combined with the `add role` root-initial prompt: `/` → `/(<role>)` → `/(<role>)/(tabs)` → first tab. Default no — outer redirect untouched; tabs reachable only via programmatic navigation.
+
+Replace placeholder icons in `(tabs)/_layout.tsx` afterwards.
 
 Atomic: if anything fails, every file written so far is rolled back.
 

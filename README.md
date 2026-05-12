@@ -163,6 +163,8 @@ src/app/(customer)/
 
 Also registers `<Stack.Screen name="(customer)" />` in `src/app/routes.tsx`.
 
+A final prompt asks **"Make this role the app's initial route?"** — answering yes rewrites `src/app/index.tsx` to `<Redirect href="/(customer)" />` so launch lands directly on the role. Default `no` (root index left untouched). Same prompt fires for `add feature <name>` (standalone, 1-arg form).
+
 > `add role auth` is refused with a hint to use `add feature auth` — `auth` should be a standalone feature, not a role.
 
 #### `add feature <name>` (1-arg, standalone)
@@ -252,7 +254,7 @@ src/app/(customer)/(tabs)/
 
 Also patches `src/app/(customer)/_layout.tsx` to add `<Stack.Screen name="(tabs)" />` (converts self-closing Stack to wrapping form if needed; appends idempotently otherwise).
 
-Tabs are reachable via programmatic navigation to `/(customer)/(tabs)`. The outer `(customer)/index.tsx` redirect (from `add role`) is left untouched — call `router.replace("/(customer)/(tabs)")` from the role's landing screen when ready to enter tabs.
+A final prompt asks **"Make tabs the role's landing destination?"** — answering yes rewrites `src/app/(<role>)/index.tsx` from its original first-screen redirect to `<Redirect href="/(<role>)/(tabs)" />`. Combined with `add role` answering yes to the root-initial prompt, this wires the full launch chain: `/` → `/(role)` → `/(role)/(tabs)` → first tab. Default `no` — outer redirect untouched; tabs reachable only via programmatic navigation.
 
 Refuses when the role does not exist or is a standalone feature, when `(tabs)/` already exists, when the role layout is malformed, when tab count is outside 2–5, when tab names duplicate within the batch, or when a tab name hits the reserved list.
 

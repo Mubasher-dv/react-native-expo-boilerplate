@@ -146,6 +146,36 @@ describe("addStandaloneFeature", () => {
     expect(true).toBe(true);
   });
 
+  it("rewrites src/app/index.tsx → <Redirect href=\"/(auth)\" /> when makeRootInitial=true", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    fs.writeFileSync(
+      path.join(t, "src/app/index.tsx"),
+      "export default function Home() { return null; }\n",
+    );
+    await addStandaloneFeature("auth", {
+      target: t,
+      promptInputs: async () => ({ screen: "login", makeRootInitial: true }),
+    });
+    expect(
+      fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(auth)" />');
+  });
+
+  it("leaves src/app/index.tsx untouched when makeRootInitial=false", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    const original = "export default function Home() { return null; }\n";
+    fs.writeFileSync(path.join(t, "src/app/index.tsx"), original);
+    await addStandaloneFeature("auth", {
+      target: t,
+      promptInputs: async () => ({ screen: "login", makeRootInitial: false }),
+    });
+    expect(fs.readFileSync(path.join(t, "src/app/index.tsx"), "utf8")).toBe(
+      original,
+    );
+  });
+
   it("rollback: late failure removes all files just written", async () => {
     const t = mkTmp();
     seedExpoApp(t);

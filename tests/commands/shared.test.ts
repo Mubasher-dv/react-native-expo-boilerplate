@@ -767,6 +767,101 @@ describe("printRebuildReminder", () => {
 });
 
 import {
+  buildRootRedirect,
+  rootIndexFile,
+  setRootIndexRedirect,
+} from "../../src/commands/shared.js";
+
+describe("buildRootRedirect", () => {
+  it("emits a <Redirect href=\"/(group)\" /> module with the expo-router import", () => {
+    const out = buildRootRedirect("customer");
+    expect(out).toContain('import { Redirect } from "expo-router"');
+    expect(out).toContain("export default function Index()");
+    expect(out).toContain('<Redirect href="/(customer)" />');
+  });
+});
+
+describe("rootIndexFile", () => {
+  it("resolves to src/app/index.tsx under target", () => {
+    expect(rootIndexFile("/tmp/proj")).toBe(
+      path.join("/tmp/proj", "src/app/index.tsx"),
+    );
+  });
+});
+
+describe("setRootIndexRedirect", () => {
+  it("creates src/app/index.tsx when missing; records as create", () => {
+    const t = mkTmp();
+    const j = newJournal();
+    const out = setRootIndexRedirect(t, "customer", j);
+    expect(out).toBe(path.join(t, "src/app/index.tsx"));
+    expect(fs.existsSync(out!)).toBe(true);
+    expect(fs.readFileSync(out!, "utf8")).toContain(
+      '<Redirect href="/(customer)" />',
+    );
+    expect(j.created).toContain(out!);
+    expect(j.edited).toEqual([]);
+  });
+
+  it("overwrites pre-existing root index; records pre-edit snapshot", () => {
+    const t = mkTmp();
+    fs.mkdirSync(path.join(t, "src/app"), { recursive: true });
+    const f = path.join(t, "src/app/index.tsx");
+    const before = "export default function Home() { return null; }\n";
+    fs.writeFileSync(f, before);
+    const j = newJournal();
+    const out = setRootIndexRedirect(t, "customer", j);
+    expect(out).toBe(f);
+    expect(fs.readFileSync(f, "utf8")).toContain(
+      '<Redirect href="/(customer)" />',
+    );
+    expect(j.edited).toEqual([{ path: f, before }]);
+  });
+
+  it("is a no-op when the file already redirects to the same group", () => {
+    const t = mkTmp();
+    fs.mkdirSync(path.join(t, "src/app"), { recursive: true });
+    const f = path.join(t, "src/app/index.tsx");
+    fs.writeFileSync(f, buildRootRedirect("customer"));
+    const j = newJournal();
+    const out = setRootIndexRedirect(t, "customer", j);
+    expect(out).toBeNull();
+    expect(j.created).toEqual([]);
+    expect(j.edited).toEqual([]);
+  });
+
+  it("overwrites when the existing redirect points to a different group", () => {
+    const t = mkTmp();
+    fs.mkdirSync(path.join(t, "src/app"), { recursive: true });
+    const f = path.join(t, "src/app/index.tsx");
+    fs.writeFileSync(f, buildRootRedirect("merchant"));
+    const j = newJournal();
+    const out = setRootIndexRedirect(t, "customer", j);
+    expect(out).toBe(f);
+    expect(fs.readFileSync(f, "utf8")).toContain(
+      '<Redirect href="/(customer)" />',
+    );
+    expect(fs.readFileSync(f, "utf8")).not.toContain(
+      '<Redirect href="/(merchant)" />',
+    );
+    expect(j.edited).toHaveLength(1);
+  });
+
+  it("rollback restores the prior content", async () => {
+    const t = mkTmp();
+    fs.mkdirSync(path.join(t, "src/app"), { recursive: true });
+    const f = path.join(t, "src/app/index.tsx");
+    const before = "// custom user content\n";
+    fs.writeFileSync(f, before);
+    const j = newJournal();
+    setRootIndexRedirect(t, "customer", j);
+    expect(fs.readFileSync(f, "utf8")).toContain('<Redirect href="/(customer)" />');
+    await rollback(j);
+    expect(fs.readFileSync(f, "utf8")).toBe(before);
+  });
+});
+
+import {
   assertRoleLayoutParseable,
   buildTabPlaceholder,
   buildTabsIndexRedirect,

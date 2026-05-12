@@ -18,6 +18,7 @@ import {
   rollback,
   roleExists,
   tabsGroupExists,
+  updateRedirectTarget,
   writeTabsGroup,
 } from "./shared.js";
 
@@ -27,7 +28,16 @@ const MAX_TABS = 5;
 export type AddBottomTabOptions = {
   target?: string;
   /** Test injection: skip count + name prompts. */
-  promptInputs?: () => Promise<{ tabs: string[] }>;
+  promptInputs?: () => Promise<{
+    tabs: string[];
+    /**
+     * If true, `src/app/(<role>)/index.tsx` redirect is rewritten from the
+     * role's original first screen to `/(<role>)/(tabs)` so navigating into
+     * the role lands inside the tabs group. Default false — outer redirect
+     * left untouched (matches the prior `add bottom-tab` behavior).
+     */
+    makeTabsInitial?: boolean;
+  }>;
   /** Test-only: throw after tab files are written, before the layout splice. */
   _failAfterWrites?: boolean;
 };
@@ -45,7 +55,10 @@ async function promptName(label: string): Promise<string> {
   return a.value as string;
 }
 
-async function promptTabsInteractive(): Promise<{ tabs: string[] }> {
+async function promptTabsInteractive(): Promise<{
+  tabs: string[];
+  makeTabsInitial: boolean;
+}> {
   const countAnswer = await prompts(
     {
       type: "number",
@@ -63,7 +76,21 @@ async function promptTabsInteractive(): Promise<{ tabs: string[] }> {
   for (let i = 1; i <= n; i++) {
     tabs.push(await promptName(`Tab #${i} name`));
   }
-  return { tabs };
+  // Final toggle — rewires the role's outer redirect so navigation into the
+  // role lands inside tabs (instead of the role's original first screen).
+  const tail = await prompts(
+    {
+      type: "toggle",
+      name: "makeTabsInitial",
+      message:
+        "Make tabs the role's landing destination (rewrite (role)/index.tsx redirect)?",
+      initial: false,
+      active: "yes",
+      inactive: "no",
+    },
+    { onCancel: () => process.exit(1) },
+  );
+  return { tabs, makeTabsInitial: !!tail.makeTabsInitial };
 }
 
 /**
@@ -146,6 +173,14 @@ export async function addBottomTab(
     // 9. splice `<Stack.Screen name="(tabs)" />` into role's _layout.tsx
     const layoutPath = registerTabsInRoleLayout(target, role, j);
     if (layoutPath) written.push(layoutPath);
+
+    // 10. optional: rewrite (role)/index.tsx href so navigating into the role
+    // lands inside tabs. `updateRedirectTarget` writes `/(role)/(tabs)` which
+    // Expo Router resolves to `(tabs)/index.tsx` → its own redirect → first
+    // tab. Single source of truth for the first tab stays inside `(tabs)/`.
+    if (inputs.makeTabsInitial) {
+      written.push(updateRedirectTarget(target, role, "(tabs)", j));
+    }
   } catch (err) {
     log.error(`add bottom-tab failed — rolling back changes`);
     await rollback(j);

@@ -190,6 +190,58 @@ export function routesTsxPath(target: string): string {
   return path.join(target, "src", "app", "routes.tsx");
 }
 
+/** `src/app/index.tsx` — the root entry route the app renders on launch. */
+export function rootIndexFile(target: string): string {
+  return path.join(target, "src", "app", "index.tsx");
+}
+
+/**
+ * Renders `src/app/index.tsx` as a thin <Redirect> into the given route group.
+ * `group` is the camelCase role / standalone-feature name; the resulting href
+ * is `/(<group>)` so Expo Router lands on that group's own `index.tsx`
+ * redirect (which in turn lands on the group's first screen or its tabs).
+ */
+export function buildRootRedirect(group: string): string {
+  return [
+    `import { Redirect } from "expo-router";`,
+    ``,
+    `export default function Index() {`,
+    `  return <Redirect href="/(${group})" />;`,
+    `}`,
+    ``,
+  ].join("\n");
+}
+
+/**
+ * Rewrite `src/app/index.tsx` to redirect into `/(group)`. Records the prior
+ * content in the journal so rollback restores. Called only when the user opts
+ * in to the "Make root index redirect to /(<name>)?" prompt at role /
+ * standalone-feature creation.
+ *
+ * If the existing file already redirects to the same group, no-op (return
+ * null) so the journal doesn't capture a redundant snapshot. Different
+ * destinations get overwritten.
+ */
+export function setRootIndexRedirect(
+  target: string,
+  group: string,
+  j: Journal,
+): string | null {
+  const file = rootIndexFile(target);
+  const content = buildRootRedirect(group);
+  if (fileExists(file)) {
+    const before = fs.readFileSync(file, "utf8");
+    if (before === content) return null; // already pointing here
+    recordEdit(j, file, before);
+    fs.writeFileSync(file, content);
+  } else {
+    ensureDirJournaled(j, path.dirname(file));
+    fs.writeFileSync(file, content);
+    recordCreate(j, file);
+  }
+  return file;
+}
+
 /* ---------- Existence checks ---------- */
 
 /** True if either the features dir OR the route group dir is on disk. */

@@ -105,6 +105,56 @@ describe("addBottomTab", () => {
     expect(roleLayout).toMatch(/<Stack[^/]*?>[\s\S]*?<\/Stack>/);
   });
 
+  it("rewrites (role)/index.tsx redirect into /(role)/(tabs) when makeTabsInitial=true (full app→role→tabs→tab chain)", async () => {
+    const t = mkTmp();
+    await seedRole(t);
+    // Before: (role)/index.tsx redirects at role's original first screen.
+    expect(
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/home" />');
+
+    await addBottomTab("customer", {
+      target: t,
+      promptInputs: async () => ({
+        tabs: ["dashboard", "bookings"],
+        makeTabsInitial: true,
+      }),
+    });
+
+    // After: redirect target is `(tabs)` — Expo Router resolves it to
+    // `(tabs)/index.tsx` which redirects to the first tab. Single source of
+    // truth for first-tab identity stays inside `(tabs)/`.
+    const after = fs.readFileSync(
+      path.join(t, "src/app/(customer)/index.tsx"),
+      "utf8",
+    );
+    expect(after).toContain('<Redirect href="/(customer)/(tabs)" />');
+    expect(after).not.toContain('<Redirect href="/(customer)/home" />');
+
+    // Inner (tabs)/index.tsx still points at first tab → chain works.
+    expect(
+      fs.readFileSync(
+        path.join(t, "src/app/(customer)/(tabs)/index.tsx"),
+        "utf8",
+      ),
+    ).toContain('<Redirect href="/(customer)/(tabs)/dashboard" />');
+  });
+
+  it("leaves (role)/index.tsx untouched when makeTabsInitial=false / omitted", async () => {
+    const t = mkTmp();
+    await seedRole(t);
+    await addBottomTab("customer", {
+      target: t,
+      promptInputs: async () => ({
+        tabs: ["dashboard", "bookings"],
+        makeTabsInitial: false,
+      }),
+    });
+    expect(
+      fs.readFileSync(path.join(t, "src/app/(customer)/index.tsx"), "utf8"),
+    ).toContain('<Redirect href="/(customer)/home" />');
+  });
+
   it("appends to a wrapping role layout (preserves existing Stack.Screen children)", async () => {
     const t = mkTmp();
     await seedRole(t);

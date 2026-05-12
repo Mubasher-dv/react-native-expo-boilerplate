@@ -13,6 +13,8 @@ Run `codingpixel-expo-app add role` from the project root. The CLI will prompt f
 - `src/app/(<role>)/<screen>.tsx` (re-export)
 - registers `<Stack.Screen name="(<role>)" />` in `src/app/routes.tsx`.
 
+A final prompt asks whether to make this role the app's initial route. Answering yes rewrites `src/app/index.tsx` to `<Redirect href="/(<role>)" />` so launch lands on the role. Default no — root index untouched.
+
 > `add role auth` is refused — `auth` should be a standalone feature, not a role. Use `add feature auth` instead (1-arg form), then `add screen auth login`, `add screen auth signUp`, etc.
 
 Atomic: if anything fails, every file written so far is rolled back.
