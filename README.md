@@ -59,21 +59,43 @@ Rebuild after: `yarn ios` / `yarn android`.
 
 ### Asset recipes
 
-**`app-icon`** — interactively prompts **only** for a source image path. Accepted formats: `.png`, `.jpg`, `.jpeg` (case-insensitive; anything else throws before any copy). Recommended source: **1024 × 1024 square PNG** — smaller / non-square sources still copy but log a warning. No size prompt — Expo regenerates all platform sizes from the single source at prebuild time. Copies source to both `src/assets/icon.<ext>` (iOS + Android + favicon fallback) and `src/assets/adaptive-icon.<ext>` (Android adaptive icon foreground), preserving the source extension. Cleans up sibling files in other allowed extensions (e.g. stale `icon.png` when writing `icon.jpg`). Updates `app.json` `expo.icon` and `expo.android.adaptiveIcon.foregroundImage`; also fills `expo.android.adaptiveIcon.backgroundColor` with `#ffffff` when absent (required pair — the Android adaptive icon won't render without a background). User-set `backgroundColor` is preserved.
+**`app-icon`** — interactively prompts **only** for a source image path. Accepted format: **`.png` only** (case-insensitive). JPG / JPEG throw before any copy — per Expo SDK 54 docs, Android adaptive icon foreground requires PNG, and JPG/JPEG silently fail to render on Android. Recommended source: **1024 × 1024 square PNG**; sources below `432 × 432` (Android adaptive minimum at xxxhdpi) or below `1024 × 1024` (App Store / Play Store recommendation) still copy but log warnings.
 
 ```bash
 npx codingpixel-expo-app add app-icon
 ```
 
-The CLI does **not** resize — Expo regenerates all platform sizes from the single source at prebuild time. The recommended 1024 × 1024 source is enforced only as an informational warning when smaller / non-square.
+The recipe:
 
-Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from `app.json`), then `yarn ios` / `yarn android`. **If the icon doesn't update**: app icons cache aggressively on simulators / emulators — delete the app from the device first (iOS Simulator: long-press app → Remove App; Android emulator: long-press app → drag to Uninstall, or `adb uninstall <package>`), then `yarn ios` / `yarn android` again.
+1. Reads existing `expo.icon` from `app.json` and uses **that path** for the copy (preserves stock `create-expo-app`'s `./assets/images/icon.png` layout if present; defaults to this CLI's `./src/assets/icon.png` if absent). Same for `expo.android.adaptiveIcon.foregroundImage` (or derives a sibling `adaptive-<basename>` if absent).
+2. Copies the source to both resolved destinations.
+3. Cleans up stale legacy siblings (`icon.jpg` / `icon.jpeg` from v0.2.0 / v0.2.1 scaffolds — those versions accepted JPG and shipped a broken Android icon).
+4. Writes **four** `app.json` fields covering both modern + older Android (and iOS):
+
+   | Field | Purpose |
+   |---|---|
+   | `expo.icon` | iOS + web favicon fallback (Android default fallback too) |
+   | `expo.android.icon` | Android < 8.0 non-adaptive fallback (older devices show no icon without this) |
+   | `expo.android.adaptiveIcon.foregroundImage` | Android 8.0+ adaptive foreground layer |
+   | `expo.android.adaptiveIcon.backgroundColor` | `#ffffff` only-if-absent (required pair — user-set value preserved) |
+
+The CLI does **not** resize — Expo regenerates all platform sizes from the single source at prebuild time.
+
+Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from `app.json`), then `yarn ios` / `yarn android`.
+
+**Android icon not updating after rebuild?** Three almost-always causes:
+
+1. **Skipped `npx expo prebuild --clean`** — without `--clean`, `android/app/src/main/res/mipmap-*` stays stale and the new icon never gets baked into the APK.
+2. **Emulator / device cached the old icon** — uninstall first (long-press → Uninstall, or `adb uninstall <expo.android.package>`), then `yarn android` again.
+3. **Source PNG below 432 × 432** — Android adaptive icon may render fuzzy or fall back to launcher default. Provide a 1024 × 1024 square PNG.
+
+iOS Simulator has the same caching behavior — delete the app from the simulator (long-press → Remove App) then rerun `yarn ios`.
 
 **`splash`** — interactively prompts for a background color (hex, default `#ffffff`) + a centered image path. Then:
 
 1. Runs `expo install expo-splash-screen` (mandatory — the plugin entry in `app.json` fails to resolve at `expo prebuild` time without the package installed; you'll see `PluginError: Failed to resolve plugin for module "expo-splash-screen"` if this step is skipped).
 2. Copies the source to `src/assets/splash-icon.png`.
-3. Writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. Merge-preserves any existing `dark` / `ios` / `android` sub-blocks. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+3. Writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. Also writes a `dark: { backgroundColor: <same color> }` block so dark-mode devices don't get a default-color flash (edit `app.json` afterwards if you want a different dark color or to set a `dark.image`). Merge-preserves any existing `dark.image` / `ios` / `android` sub-blocks. If a legacy `expo.splash` field is present, that's updated to match (defensive).
 4. Splices `SplashScreen.preventAutoHideAsync()` (module scope) + `useEffect(() => SplashScreen.hideAsync(), [])` (inside `RootLayout`) into `src/app/_layout.tsx`. Without this, Expo auto-hides the splash the moment the JS bundle loads (before the layout mounts), and your configured splash never actually renders. Idempotent — skips on re-run, and merges `useEffect` into an existing `from "react"` import rather than adding a duplicate line.
 
 ```bash

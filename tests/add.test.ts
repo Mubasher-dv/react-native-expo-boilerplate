@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   assertIconExtension,
   assertSafeAssetFilename,
+  deriveIconDests,
   ensureImagePickerPlugin,
   patchLayoutForSplash,
   readPngDimensions,
@@ -207,11 +208,20 @@ describe("validateIconSource", () => {
     expect(warnings.some((w) => /non-square/i.test(w))).toBe(true);
   });
 
-  it("warns when PNG source is smaller than 1024", () => {
-    const p = path.join(tmp, "small.png");
-    fs.writeFileSync(p, makePngHeader(512, 512));
+  it("warns when PNG source is smaller than 1024 (store recommendation)", () => {
+    const p = path.join(tmp, "med.png");
+    fs.writeFileSync(p, makePngHeader(800, 800));
     const { warnings } = validateIconSource(p);
-    expect(warnings.some((w) => /smaller than/i.test(w))).toBe(true);
+    expect(warnings.some((w) => /App Store \/ Play Store/i.test(w))).toBe(true);
+  });
+
+  it("warns about Android adaptive 432×432 minimum on sources below it", () => {
+    const p = path.join(tmp, "tiny.png");
+    fs.writeFileSync(p, makePngHeader(177, 177));
+    const { warnings } = validateIconSource(p);
+    expect(warnings.some((w) => /Android adaptive-icon minimum of 432/i.test(w))).toBe(true);
+    // Also still warns about 1024 store recommendation.
+    expect(warnings.some((w) => /App Store \/ Play Store/i.test(w))).toBe(true);
   });
 
   it("warns when file claims .png but has invalid header", () => {
@@ -220,14 +230,6 @@ describe("validateIconSource", () => {
     const { dims, warnings } = validateIconSource(p);
     expect(dims).toBeNull();
     expect(warnings.some((w) => /PNG signature/i.test(w))).toBe(true);
-  });
-
-  it("skips dimension checks for non-PNG extensions (.jpg / .jpeg)", () => {
-    const p = path.join(tmp, "icon.jpg");
-    fs.writeFileSync(p, Buffer.from([0xff, 0xd8, 0xff, 0xe0])); // JPEG SOI
-    const { dims, warnings } = validateIconSource(p);
-    expect(dims).toBeNull();
-    expect(warnings).toEqual([]);
   });
 });
 
@@ -239,33 +241,38 @@ describe("assertIconExtension", () => {
     expect(assertIconExtension("/a/icon.PNG")).toBe("png");
   });
 
-  it("accepts .jpg + .jpeg", () => {
-    expect(assertIconExtension("/a/icon.jpg")).toBe("jpg");
-    expect(assertIconExtension("/a/icon.JPG")).toBe("jpg");
-    expect(assertIconExtension("/a/icon.jpeg")).toBe("jpeg");
-    expect(assertIconExtension("/a/icon.JPEG")).toBe("jpeg");
+  it("rejects .jpg + .jpeg with Android-specific guidance", () => {
+    for (const ext of [".jpg", ".JPG", ".jpeg", ".JPEG"]) {
+      try {
+        assertIconExtension(`/a/icon${ext}`);
+        throw new Error(`should have thrown for ${ext}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        expect(msg).toMatch(/Android adaptive icon foreground requires PNG/i);
+        expect(msg).toMatch(/Convert/i);
+      }
+    }
   });
 
-  it("throws on unsupported extension (.webp, .svg, .gif, .bmp)", () => {
-    expect(() => assertIconExtension("/a/icon.webp")).toThrow(/Unsupported/i);
-    expect(() => assertIconExtension("/a/icon.svg")).toThrow(/Unsupported/i);
-    expect(() => assertIconExtension("/a/icon.gif")).toThrow(/Unsupported/i);
-    expect(() => assertIconExtension("/a/icon.bmp")).toThrow(/Unsupported/i);
+  it("rejects all other extensions (.webp, .svg, .gif, .bmp, none)", () => {
+    for (const path of [
+      "/a/icon.webp",
+      "/a/icon.svg",
+      "/a/icon.gif",
+      "/a/icon.bmp",
+      "/a/icon",
+    ]) {
+      expect(() => assertIconExtension(path)).toThrow(/Unsupported/i);
+    }
   });
 
-  it("throws on no extension", () => {
-    expect(() => assertIconExtension("/a/icon")).toThrow(/Unsupported/i);
-  });
-
-  it("error message names the file + lists supported formats", () => {
+  it("error message names the offending file + cites PNG requirement", () => {
     try {
       assertIconExtension("/a/logo.webp");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       expect(msg).toContain("logo.webp");
-      expect(msg).toContain(".png");
-      expect(msg).toContain(".jpg");
-      expect(msg).toContain(".jpeg");
+      expect(msg).toMatch(/PNG/i);
     }
   });
 });
@@ -366,36 +373,79 @@ describe("patchLayoutForSplash", () => {
 
 // ---------- setIconConfig ----------
 
+// ---------- deriveIconDests ----------
+
+describe("deriveIconDests", () => {
+  it("defaults to ./src/assets/icon.png + adaptive-icon.png when app.json has no icon fields", () => {
+    fs.writeFileSync(path.join(tmp, "app.json"), JSON.stringify({ expo: {} }, null, 2));
+    const dests = deriveIconDests(tmp, "png");
+    expect(dests.iconAppJson).toBe("./src/assets/icon.png");
+    expect(dests.adaptiveAppJson).toBe("./src/assets/adaptive-icon.png");
+    expect(dests.iconRel).toBe("src/assets/icon.png");
+    expect(dests.adaptiveRel).toBe("src/assets/adaptive-icon.png");
+  });
+
+  it("preserves user's existing `expo.icon` path (stock create-expo-app layout)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({ expo: { icon: "./assets/images/appIcon.png" } }, null, 2),
+    );
+    const dests = deriveIconDests(tmp, "png");
+    expect(dests.iconAppJson).toBe("./assets/images/appIcon.png");
+    expect(dests.iconRel).toBe("assets/images/appIcon.png");
+    // Adaptive derived from icon base: appIcon → adaptive-appIcon.
+    expect(dests.adaptiveAppJson).toBe("./assets/images/adaptive-appIcon.png");
+    expect(dests.adaptiveRel).toBe("assets/images/adaptive-appIcon.png");
+  });
+
+  it("preserves user's existing adaptive foregroundImage path independently of icon path", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify(
+        {
+          expo: {
+            icon: "./assets/images/icon.png",
+            android: {
+              adaptiveIcon: {
+                foregroundImage: "./assets/android/fg.png",
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const dests = deriveIconDests(tmp, "png");
+    expect(dests.iconAppJson).toBe("./assets/images/icon.png");
+    expect(dests.adaptiveAppJson).toBe("./assets/android/fg.png");
+  });
+
+  it("uses adaptive-icon sibling for the conventional `icon` basename", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({ expo: { icon: "./assets/images/icon.png" } }, null, 2),
+    );
+    const dests = deriveIconDests(tmp, "png");
+    expect(dests.adaptiveAppJson).toBe("./assets/images/adaptive-icon.png");
+  });
+});
+
 describe("setIconConfig", () => {
-  it("defaults to .png paths when no ext given", () => {
+  it("writes all four icon fields per Expo SDK 54 docs", () => {
     writeAppJson([]);
     setIconConfig(tmp);
     const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    // iOS + favicon fallback.
     expect(json.expo.icon).toBe("./src/assets/icon.png");
+    // Android non-adaptive fallback (< Android 8.0).
+    expect(json.expo.android.icon).toBe("./src/assets/icon.png");
+    // Android 8.0+ adaptive foreground.
     expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
       "./src/assets/adaptive-icon.png",
     );
+    // Required pair — without this, adaptive icon won't render.
     expect(json.expo.android.adaptiveIcon.backgroundColor).toBe("#ffffff");
-  });
-
-  it("writes .jpg paths when ext = 'jpg'", () => {
-    writeAppJson([]);
-    setIconConfig(tmp, "jpg");
-    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
-    expect(json.expo.icon).toBe("./src/assets/icon.jpg");
-    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
-      "./src/assets/adaptive-icon.jpg",
-    );
-  });
-
-  it("writes .jpeg paths when ext = 'jpeg'", () => {
-    writeAppJson([]);
-    setIconConfig(tmp, "jpeg");
-    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
-    expect(json.expo.icon).toBe("./src/assets/icon.jpeg");
-    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
-      "./src/assets/adaptive-icon.jpeg",
-    );
   });
 
   it("preserves user-set adaptiveIcon.backgroundColor (does NOT overwrite)", () => {
@@ -450,9 +500,40 @@ describe("setIconConfig", () => {
     expect(json.expo.name).toBe("MyApp");
     expect(json.expo.android.package).toBe("com.myapp");
     expect(json.expo.android.versionCode).toBe(5);
+    expect(json.expo.android.icon).toBe("./src/assets/icon.png");
     expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
       "./src/assets/adaptive-icon.png",
     );
+  });
+
+  it("respects user's existing expo.icon path (stock layout) — writes to that path, doesn't clobber", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({ expo: { icon: "./assets/images/appIcon.png" } }, null, 2),
+    );
+    setIconConfig(tmp);
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    expect(json.expo.icon).toBe("./assets/images/appIcon.png");
+    expect(json.expo.android.icon).toBe("./assets/images/appIcon.png");
+    // Adaptive derived from existing icon basename.
+    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe(
+      "./assets/images/adaptive-appIcon.png",
+    );
+    expect(json.expo.android.adaptiveIcon.backgroundColor).toBe("#ffffff");
+  });
+
+  it("accepts an explicit IconDests override", () => {
+    writeAppJson([]);
+    setIconConfig(tmp, {
+      iconRel: "x/y.png",
+      adaptiveRel: "x/z.png",
+      iconAppJson: "./x/y.png",
+      adaptiveAppJson: "./x/z.png",
+    });
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    expect(json.expo.icon).toBe("./x/y.png");
+    expect(json.expo.android.icon).toBe("./x/y.png");
+    expect(json.expo.android.adaptiveIcon.foregroundImage).toBe("./x/z.png");
   });
 });
 
@@ -461,7 +542,7 @@ describe("setIconConfig", () => {
 describe("setSplashConfig", () => {
   const IMG = "./src/assets/splash-icon.png";
 
-  it("appends expo-splash-screen plugin entry with full options", () => {
+  it("appends expo-splash-screen plugin entry with full options INCLUDING dark block", () => {
     writeAppJson([]);
     setSplashConfig(tmp, "#ff0000", IMG);
     const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
@@ -476,21 +557,36 @@ describe("setSplashConfig", () => {
       imageWidth: 200,
       resizeMode: "contain",
       backgroundColor: "#ff0000",
+      dark: { backgroundColor: "#ff0000" },
     });
   });
 
-  it("merges into existing plugin entry preserving unknown options", () => {
+  it("dark.backgroundColor mirrors the light backgroundColor by default", () => {
+    writeAppJson([]);
+    setSplashConfig(tmp, "#ABBDCF", IMG);
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    const opts = json.expo.plugins[0][1];
+    expect(opts.dark.backgroundColor).toBe("#ABBDCF");
+  });
+
+  it("merges into existing plugin entry preserving dark.image + unknown options", () => {
     writeAppJson([
       [
         "expo-splash-screen",
-        { dark: { backgroundColor: "#000000" }, customField: 42 },
+        {
+          dark: { backgroundColor: "#000000", image: "./dark-splash.png" },
+          customField: 42,
+        },
       ],
     ]);
     setSplashConfig(tmp, "#ffffff", IMG);
     const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
     const entry = json.expo.plugins[0];
     const opts = entry[1];
-    expect(opts.dark).toEqual({ backgroundColor: "#000000" });
+    // backgroundColor in dark gets MIRRORED to the new light color (user's
+    // light/dark contrast intent — we sync them). dark.image is preserved.
+    expect(opts.dark.backgroundColor).toBe("#ffffff");
+    expect(opts.dark.image).toBe("./dark-splash.png");
     expect(opts.customField).toBe(42);
     expect(opts.image).toBe(IMG);
     expect(opts.backgroundColor).toBe("#ffffff");
@@ -568,9 +664,22 @@ describe("removeStaleIconSiblings", () => {
   it("works on adaptive-icon as well", () => {
     fs.writeFileSync(path.join(tmp, "adaptive-icon.png"), "P");
     fs.writeFileSync(path.join(tmp, "adaptive-icon.jpg"), "J");
-    const removed = removeStaleIconSiblings(tmp, "adaptive-icon", "jpg");
-    expect(removed).toEqual(["adaptive-icon.png"]);
-    expect(fs.existsSync(path.join(tmp, "adaptive-icon.jpg"))).toBe(true);
+    fs.writeFileSync(path.join(tmp, "adaptive-icon.jpeg"), "JJ");
+    const removed = removeStaleIconSiblings(tmp, "adaptive-icon", "png");
+    expect(removed.sort()).toEqual(["adaptive-icon.jpeg", "adaptive-icon.jpg"]);
+    expect(fs.existsSync(path.join(tmp, "adaptive-icon.png"))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "adaptive-icon.jpg"))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, "adaptive-icon.jpeg"))).toBe(false);
+  });
+
+  it("cleans up legacy .jpg / .jpeg from v0.2.0/v0.2.1 scaffolds on first re-run", () => {
+    // Simulates a user who ran `add app-icon` under v0.2.0 with a JPG source.
+    // Now upgrading to v0.2.2+ (PNG-only), the new run should clean these up.
+    fs.writeFileSync(path.join(tmp, "icon.jpg"), "legacy jpg");
+    fs.writeFileSync(path.join(tmp, "icon.jpeg"), "legacy jpeg");
+    fs.writeFileSync(path.join(tmp, "icon.png"), "new png");
+    const removed = removeStaleIconSiblings(tmp, "icon", "png");
+    expect(removed.sort()).toEqual(["icon.jpeg", "icon.jpg"]);
   });
 });
 

@@ -397,13 +397,32 @@ function printAssetRebuildReminder(pm: PackageManager): void {
 const DEFAULT_ICON_SIZE = 1024;
 
 /**
- * Allowed icon source formats. Expo accepts PNG natively (recommended for
- * transparency + lossless quality); JPG / JPEG are tolerated but lose
- * transparency — we accept them per user request and preserve the extension
- * through to the destination file.
+ * Allowed icon source formats.
+ *
+ * Per Expo SDK 54 docs (https://docs.expo.dev/develop/user-interface/splash-screen-and-app-icon/):
+ *   "Use .png files."
+ *
+ * Android adaptive icon foreground specifically requires PNG — JPG / JPEG
+ * silently fail to render in `expo.android.adaptiveIcon.foregroundImage`,
+ * leaving the launcher with no app icon (the user-reported bug fixed in
+ * v0.2.2). PNG is also required for transparency, which the adaptive icon
+ * foreground typically needs to render correctly within the launcher's mask.
+ *
+ * iOS is more permissive (will render JPG) but we enforce PNG for the whole
+ * recipe to keep cross-platform behavior consistent — a single source feeds
+ * both `expo.icon` (iOS) and the Android adaptive paths.
  */
-export const ALLOWED_ICON_EXTS = ["png", "jpg", "jpeg"] as const;
+export const ALLOWED_ICON_EXTS = ["png"] as const;
 export type IconExt = (typeof ALLOWED_ICON_EXTS)[number];
+
+/**
+ * Minimum recommended pixel dimensions for the Android adaptive icon foreground
+ * (per [Android Adaptive Icon Guidelines](https://developer.android.com/develop/ui/views/launch/icon_design_adaptive)).
+ *
+ * Adaptive icon canvas is 108dp × 108dp; at xxxhdpi (4×) that's 432 × 432 px.
+ * Sources smaller than this get upscaled by the launcher and look fuzzy.
+ */
+const ANDROID_ADAPTIVE_MIN = 432;
 
 /**
  * Extract + validate the icon source extension. Returns the lower-cased
@@ -416,9 +435,13 @@ export function assertIconExtension(absPath: string): IconExt {
   const raw = path.extname(absPath).toLowerCase().replace(/^\./, "");
   if (!(ALLOWED_ICON_EXTS as readonly string[]).includes(raw)) {
     const display = raw === "" ? "<none>" : `.${raw}`;
+    const reason =
+      raw === "jpg" || raw === "jpeg"
+        ? "Android adaptive icon foreground requires PNG — JPG/JPEG silently fails to render. " +
+          "Convert the source to PNG (preserve transparency where possible) and try again."
+        : `App icons must be PNG per Expo SDK 54 docs.`;
     throw new Error(
-      `Unsupported icon extension: "${display}" (file: "${path.basename(absPath)}"). ` +
-        `App icons must be one of: ${ALLOWED_ICON_EXTS.map((e) => "." + e).join(", ")}.`,
+      `Unsupported icon extension: "${display}" (file: "${path.basename(absPath)}"). ${reason}`,
     );
   }
   return raw as IconExt;
@@ -435,20 +458,21 @@ export function validateIconSource(
   filePath: string,
 ): { dims: { width: number; height: number } | null; warnings: string[] } {
   const warnings: string[] = [];
-  // JPG / JPEG have a different header — readPngDimensions returns null.
-  // Skip dimension warnings for those; the user picked the format consciously.
-  const isPng = path.extname(filePath).toLowerCase() === ".png";
-  const dims = isPng ? readPngDimensions(filePath) : null;
-  if (isPng && !dims) {
+  const dims = readPngDimensions(filePath);
+  if (!dims) {
     warnings.push(
       "Source claims `.png` but the header is not a valid PNG signature. Copying anyway — Expo will surface the build-time error.",
     );
     return { dims, warnings };
   }
-  if (!dims) return { dims, warnings };
   if (dims.width !== dims.height) {
     warnings.push(
       `Source is non-square (${dims.width}×${dims.height}). Expo expects a square icon; the result will be letterboxed or distorted.`,
+    );
+  }
+  if (dims.width < ANDROID_ADAPTIVE_MIN || dims.height < ANDROID_ADAPTIVE_MIN) {
+    warnings.push(
+      `Source (${dims.width}×${dims.height}) is below the Android adaptive-icon minimum of ${ANDROID_ADAPTIVE_MIN}×${ANDROID_ADAPTIVE_MIN} (per Android launcher guidelines — foreground canvas at xxxhdpi). The Android icon may render fuzzy or not at all.`,
     );
   }
   if (dims.width < DEFAULT_ICON_SIZE || dims.height < DEFAULT_ICON_SIZE) {
@@ -462,36 +486,138 @@ export function validateIconSource(
 const DEFAULT_ADAPTIVE_BG = "#ffffff";
 
 /**
+ * Resolved icon destination paths — exposed so the recipe can copy the source
+ * to the right place before `setIconConfig` writes app.json fields pointing
+ * at those paths.
+ */
+export type IconDests = {
+  /** Where to copy the icon source. Relative to `target` root (e.g. `src/assets/icon.png`). */
+  iconRel: string;
+  /** Where to copy the adaptive-icon source. Relative to `target` root. */
+  adaptiveRel: string;
+  /** Value written to `expo.icon` and `expo.android.icon` (with `./` prefix). */
+  iconAppJson: string;
+  /** Value written to `expo.android.adaptiveIcon.foregroundImage` (with `./` prefix). */
+  adaptiveAppJson: string;
+};
+
+/**
+ * Strip leading `./` if present. app.json paths typically include it; on-disk
+ * paths shouldn't.
+ */
+function stripDotSlash(p: string): string {
+  return p.replace(/^\.\//, "");
+}
+
+/**
+ * Derive the icon destination paths from the user's existing app.json.
+ *
+ * Rationale: the user may have a non-default project layout, especially
+ * projects scaffolded from stock `create-expo-app` (which uses
+ * `./assets/images/icon.png`) rather than this CLI's `./src/assets/icon.png`.
+ * Forcing canonical paths used to clobber the user's `expo.icon` and copy the
+ * source to a location iOS never reads — the iOS app icon would update
+ * accidentally if app.json happened to be re-read, but the file lived in the
+ * wrong place. Preserving the user's existing paths fixes this.
+ *
+ * Resolution rules:
+ *   1. `expo.icon` (top-level) — if a string, use it verbatim. Else default
+ *      `./src/assets/icon.<ext>` (this CLI's convention).
+ *   2. `expo.android.adaptiveIcon.foregroundImage` — if a string, use it
+ *      verbatim. Else derive from the resolved icon path:
+ *      - If basename is `icon.<ext>`, sibling becomes `adaptive-icon.<ext>`.
+ *      - Otherwise sibling becomes `adaptive-<basename>.<ext>`.
+ *
+ * Exported for testing.
+ */
+export function deriveIconDests(target: string, ext: IconExt = "png"): IconDests {
+  const appJsonPath = path.join(target, "app.json");
+  const json = JSON.parse(fs.readFileSync(appJsonPath, "utf8")) as ExpoAppJson;
+  const expo = (json.expo ?? {}) as Record<string, unknown>;
+  const existingIcon =
+    typeof expo.icon === "string" ? (expo.icon as string) : undefined;
+  const android = (expo.android as Record<string, unknown> | undefined) ?? {};
+  const adaptive =
+    (android.adaptiveIcon as Record<string, unknown> | undefined) ?? {};
+  const existingFg =
+    typeof adaptive.foregroundImage === "string"
+      ? (adaptive.foregroundImage as string)
+      : undefined;
+
+  const iconAppJson = existingIcon ?? `./src/assets/icon.${ext}`;
+
+  // Derive adaptive path: respect existing, else sibling-of-icon.
+  let adaptiveAppJson: string;
+  if (existingFg) {
+    adaptiveAppJson = existingFg;
+  } else {
+    // path.posix.join normalizes away the leading "./" — manage it manually.
+    const iconWithoutDotSlash = stripDotSlash(iconAppJson);
+    const iconDir = path.posix.dirname(iconWithoutDotSlash);
+    const iconExt = path.extname(iconWithoutDotSlash) || `.${ext}`;
+    const iconBase = path.posix.basename(iconWithoutDotSlash, iconExt);
+    const adaptiveBase =
+      iconBase === "icon" ? "adaptive-icon" : `adaptive-${iconBase}`;
+    const joined =
+      iconDir === "." || iconDir === ""
+        ? `${adaptiveBase}${iconExt}`
+        : `${iconDir}/${adaptiveBase}${iconExt}`;
+    adaptiveAppJson = `./${joined}`;
+  }
+
+  return {
+    iconAppJson,
+    adaptiveAppJson,
+    iconRel: stripDotSlash(iconAppJson),
+    adaptiveRel: stripDotSlash(adaptiveAppJson),
+  };
+}
+
+/**
  * Mutator for `app.json` icon fields — exposed for testing.
  *
- * Sets per Expo SDK 54 schema (see
- * https://docs.expo.dev/versions/latest/config/app/#adaptiveicon):
- *   - `expo.icon`                                     → `./src/assets/icon.<ext>`
- *   - `expo.android.adaptiveIcon.foregroundImage`     → `./src/assets/adaptive-icon.<ext>`
+ * Sets per Expo SDK 54 docs (https://docs.expo.dev/develop/user-interface/splash-screen-and-app-icon/):
+ *
+ *   - `expo.icon`                                     → `dests.iconAppJson`
+ *       Top-level icon, used by iOS + web favicon + Android non-adaptive fallback default.
+ *   - `expo.android.icon`                             → `dests.iconAppJson`
+ *       Non-adaptive Android fallback for older devices (< Android 8.0 /
+ *       API 26 — pre-adaptive-icon era). Per docs: "You may also want to
+ *       provide a separate icon for older Android devices that do not
+ *       support Adaptive Icons. You can do so with the `android.icon`
+ *       property." Without this, older Android devices show no app icon.
+ *   - `expo.android.adaptiveIcon.foregroundImage`     → `dests.adaptiveAppJson`
+ *       Android adaptive icon foreground layer (Android 8.0+).
  *   - `expo.android.adaptiveIcon.backgroundColor`     → `#ffffff` (only if absent —
- *     user-set value preserved; pairs with `foregroundImage`, required for the
- *     Android adaptive icon to render at all).
+ *     user-set value preserved; pairs with `foregroundImage`. Without it the
+ *     Android adaptive icon doesn't render at all).
  *
- * `ext` defaults to `"png"` for back-compat; callers that copy a JPG/JPEG
- * source pass the matching extension so the app.json path lines up with the
- * actual file on disk.
- *
- * Does NOT touch `monochromeImage` (Android 13+ themed icons) — user can add
- * later from a transparent-background variant of the foreground.
+ * `dests` is typically produced by `deriveIconDests(target, ext)`, which
+ * preserves any existing user-configured paths. Pass an explicit `IconDests`
+ * here to override (e.g. tests).
  *
  * Idempotent: setting the same values twice yields the same file.
  */
-export function setIconConfig(target: string, ext: IconExt = "png"): void {
-  const iconPath = `./src/assets/icon.${ext}`;
-  const adaptivePath = `./src/assets/adaptive-icon.${ext}`;
+export function setIconConfig(
+  target: string,
+  destsOrExt: IconDests | IconExt = "png",
+): void {
+  const dests: IconDests =
+    typeof destsOrExt === "string"
+      ? deriveIconDests(target, destsOrExt)
+      : destsOrExt;
+
   mutateAppJson(target, (json) => {
     json.expo ??= {};
-    (json.expo as Record<string, unknown>).icon = iconPath;
+    (json.expo as Record<string, unknown>).icon = dests.iconAppJson;
     const expo = json.expo as Record<string, Record<string, unknown>>;
     expo.android ??= {};
+    // Non-adaptive fallback for older Android (< 8.0). Same source — single
+    // pre-rendered layer combining foreground + background.
+    (expo.android as Record<string, unknown>).icon = dests.iconAppJson;
     expo.android.adaptiveIcon ??= {};
     const adaptive = expo.android.adaptiveIcon as Record<string, unknown>;
-    adaptive.foregroundImage = adaptivePath;
+    adaptive.foregroundImage = dests.adaptiveAppJson;
     if (typeof adaptive.backgroundColor !== "string") {
       adaptive.backgroundColor = DEFAULT_ADAPTIVE_BG;
     }
@@ -499,10 +625,17 @@ export function setIconConfig(target: string, ext: IconExt = "png"): void {
 }
 
 /**
- * Remove sibling icon files with non-matching extensions, e.g. when writing
- * `icon.jpg` we delete any pre-existing `icon.png` / `icon.jpeg` so app.json
- * doesn't end up pointing at one file with leftovers on disk. Skips the file
- * we're keeping. No-op when no siblings exist.
+ * Sibling extensions we check for cleanup. Superset of `ALLOWED_ICON_EXTS` —
+ * includes formats no longer accepted as INPUT (`.jpg`, `.jpeg`) so users
+ * upgrading from v0.2.0 / v0.2.1 (which did accept JPG/JPEG) get their stale
+ * sibling files cleaned up on first re-run of `add app-icon` under the new
+ * PNG-only constraint.
+ */
+const SIBLING_ICON_EXTS = ["png", "jpg", "jpeg"] as const;
+
+/**
+ * Remove sibling icon files with non-matching extensions so app.json + disk
+ * don't drift. Skips the file we're keeping. No-op when no siblings exist.
  *
  * Exported for testing.
  */
@@ -512,7 +645,7 @@ export function removeStaleIconSiblings(
   keepExt: IconExt,
 ): string[] {
   const removed: string[] = [];
-  for (const e of ALLOWED_ICON_EXTS) {
+  for (const e of SIBLING_ICON_EXTS) {
     if (e === keepExt) continue;
     const p = path.join(assetsDir, `${baseName}.${e}`);
     if (fileExists(p)) {
@@ -576,50 +709,85 @@ export async function addAppIcon(target: string): Promise<void> {
   if (dims) log.info(`Source dimensions: ${dims.width}×${dims.height}`);
   for (const w of warnings) log.warn(w);
 
-  const assetsDir = path.join(target, "src/assets");
-  ensureDir(assetsDir);
-  const iconDest = path.join(assetsDir, `icon.${ext}`);
-  const adaptiveDest = path.join(assetsDir, `adaptive-icon.${ext}`);
-  log.step(`Copying source → ${path.relative(target, iconDest)}`);
-  fs.copyFileSync(absSrc, iconDest);
-  log.step(`Copying source → ${path.relative(target, adaptiveDest)}`);
-  fs.copyFileSync(absSrc, adaptiveDest);
+  // Derive destination paths from existing app.json (preserves user's project
+  // layout — e.g. stock create-expo-app's `./assets/images/icon.png` rather
+  // than this CLI's default `./src/assets/icon.png`).
+  const dests = deriveIconDests(target, ext);
+  const iconAbsDest = path.join(target, dests.iconRel);
+  const adaptiveAbsDest = path.join(target, dests.adaptiveRel);
 
-  // Clean up sibling files in other allowed extensions so app.json + disk
-  // don't drift apart on re-runs with a different format.
+  // Ensure destination directories exist (creates `assets/images/` etc. if missing).
+  ensureDir(path.dirname(iconAbsDest));
+  ensureDir(path.dirname(adaptiveAbsDest));
+
+  log.step(`Copying source → ${path.relative(target, iconAbsDest)}`);
+  fs.copyFileSync(absSrc, iconAbsDest);
+  log.step(`Copying source → ${path.relative(target, adaptiveAbsDest)}`);
+  fs.copyFileSync(absSrc, adaptiveAbsDest);
+
+  // Clean up sibling files in other extensions so app.json + disk don't drift.
+  // Scans BOTH the canonical `src/assets/` location AND the resolved icon dir
+  // (which may be different, e.g. `assets/images/`). Dedupe on path.
   const removedFiles: string[] = [];
-  for (const base of ["icon", "adaptive-icon"] as const) {
-    const removed = removeStaleIconSiblings(assetsDir, base, ext);
-    for (const r of removed) {
-      log.info(`Removed stale src/assets/${r} (replaced by .${ext} variant).`);
-      removedFiles.push(`src/assets/${r}`);
+  const cleanupDirs = new Set<string>([
+    path.join(target, "src/assets"),
+    path.dirname(iconAbsDest),
+    path.dirname(adaptiveAbsDest),
+  ]);
+  for (const dir of cleanupDirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const baseDest of [iconAbsDest, adaptiveAbsDest]) {
+      const baseExt = path.extname(baseDest);
+      const baseName = path.basename(baseDest, baseExt);
+      if (!fs.existsSync(path.join(dir, `${baseName}${baseExt}`)) && dir !== path.dirname(baseDest)) {
+        // No corresponding file in this dir; skip wholesale cleanup.
+        continue;
+      }
+      const removed = removeStaleIconSiblings(
+        dir,
+        baseName as "icon" | "adaptive-icon",
+        ext,
+      );
+      for (const r of removed) {
+        const rel = path.relative(target, path.join(dir, r));
+        log.info(`Removed stale ${rel} (replaced by .${ext} variant).`);
+        removedFiles.push(rel);
+      }
     }
   }
 
   log.step("Updating app.json icon paths …");
-  setIconConfig(target, ext);
+  setIconConfig(target, dests);
 
   log.success("app-icon set.");
   log.raw("");
   log.raw(
     `Expo resizes the source to all required platform sizes at prebuild time — no manual resize needed. ` +
-      `Replace src/assets/adaptive-icon.${ext} later if you want a different Android foreground ` +
-      `(transparent background, padded).`,
+      `Replace ${dests.adaptiveRel} later if you want a different Android foreground ` +
+      `(transparent background, padded — see https://developer.android.com/develop/ui/views/launch/icon_design_adaptive).`,
+  );
+  log.raw("");
+  log.info(
+    "app.json fields written:\n" +
+      `  expo.icon                                       → ${dests.iconAppJson}  (iOS + favicon fallback)\n` +
+      `  expo.android.icon                               → ${dests.iconAppJson}  (Android < 8.0 non-adaptive fallback)\n` +
+      `  expo.android.adaptiveIcon.foregroundImage       → ${dests.adaptiveAppJson}  (Android 8.0+ adaptive foreground)\n` +
+      `  expo.android.adaptiveIcon.backgroundColor       → #ffffff  (only-if-absent — user value preserved)`,
   );
 
-  printFilesChanged(
-    [`src/assets/icon.${ext}`, `src/assets/adaptive-icon.${ext}`, "app.json"],
-    removedFiles,
-  );
+  printFilesChanged([dests.iconRel, dests.adaptiveRel, "app.json"], removedFiles);
 
   const pm = await detectProjectPm(target);
   printAssetRebuildReminder(pm);
   log.raw("");
   log.warn(
-    "If the icon doesn't update after rebuild: app icons cache aggressively on " +
-      "simulators / emulators. Delete the app from the device, then run `yarn ios` / " +
-      "`yarn android` again. On iOS Simulator: long-press app → Remove App. On Android " +
-      "emulator: long-press app → drag to Uninstall (or `adb uninstall <package>`).",
+    "If the Android icon doesn't update after rebuild, the cause is almost always one of:\n" +
+      "  1. Skipped `npx expo prebuild --clean` — without --clean, android/app/src/main/res/mipmap-* " +
+      "stays stale and the new icon never gets baked into the APK.\n" +
+      "  2. Emulator / device cached the old icon. Long-press app → Uninstall (or " +
+      "`adb uninstall <expo.android.package>`), then `yarn android` again.\n" +
+      "  3. Source PNG is below 432×432 — Android adaptive icon may upscale fuzzy or fall back to default. " +
+      "Provide a 1024×1024 square PNG for clean results.",
   );
 }
 
@@ -645,22 +813,46 @@ export function setSplashConfig(
   mutateAppJson(target, (json) => {
     json.expo ??= {};
     json.expo.plugins ??= [];
+
+    // Light/default options.
     const options: Record<string, unknown> = {
       image: imageRelPath,
       imageWidth: 200,
       resizeMode: "contain",
       backgroundColor: color,
     };
+
+    // Dark-mode block — Expo docs example pairs `backgroundColor` (always) with
+    // optional `image` (dark variant). We mirror the light backgroundColor by
+    // default so dark-mode devices don't get a black or white default that
+    // clashes with the light theme. Users who want a different dark color
+    // edit `dark.backgroundColor` post-recipe.
+    //
+    // If the user had a pre-existing `dark` block with `image` set, we PRESERVE
+    // those keys via merge below — only `backgroundColor` gets mirrored.
+    const newDark: Record<string, unknown> = {
+      backgroundColor: color,
+    };
+
     const idx = json.expo.plugins.findIndex(
       (e) => pluginName(e) === "expo-splash-screen",
     );
     if (idx === -1) {
-      json.expo.plugins.push(["expo-splash-screen", options]);
+      json.expo.plugins.push(["expo-splash-screen", { ...options, dark: newDark }]);
     } else {
       const existing = json.expo.plugins[idx];
       const prevOpts: Record<string, unknown> =
         Array.isArray(existing) && existing[1] ? existing[1] : {};
-      json.expo.plugins[idx] = ["expo-splash-screen", { ...prevOpts, ...options }];
+      const prevDark =
+        (prevOpts.dark as Record<string, unknown> | undefined) ?? {};
+      json.expo.plugins[idx] = [
+        "expo-splash-screen",
+        {
+          ...prevOpts,
+          ...options,
+          dark: { ...prevDark, ...newDark },
+        },
+      ];
     }
 
     // Defensive: also update legacy `expo.splash` if present.
