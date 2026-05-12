@@ -30,50 +30,50 @@ describe("addRole", () => {
     const t = mkTmp();
     seedExpoApp(t);
 
-    await addRole("auth", {
+    await addRole("customer", {
       target: t,
       promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
     });
 
     expect(
       fs.existsSync(
-        path.join(t, "src/features/auth/dashboard/onBoarding/index.tsx"),
+        path.join(t, "src/features/customer/dashboard/onBoarding/index.tsx"),
       ),
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(t, "src/features/auth/dashboard/onBoarding/viewModel/_api.ts"),
+        path.join(t, "src/features/customer/dashboard/onBoarding/viewModel/_api.ts"),
       ),
     ).toBe(true);
     expect(
       fs.existsSync(
         path.join(
           t,
-          "src/features/auth/dashboard/onBoarding/viewModel/useOnBoardingViewModel.tsx",
+          "src/features/customer/dashboard/onBoarding/viewModel/useOnBoardingViewModel.tsx",
         ),
       ),
     ).toBe(true);
     expect(
-      fs.existsSync(path.join(t, "src/features/auth/dashboard/types.ts")),
+      fs.existsSync(path.join(t, "src/features/customer/dashboard/types.ts")),
     ).toBe(true);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/_layout.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/index.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)/onBoarding.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/_layout.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/index.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)/onBoarding.tsx"))).toBe(true);
 
     const routes = fs.readFileSync(path.join(t, "src/app/routes.tsx"), "utf8");
-    expect(routes).toContain('<Stack.Screen name="(auth)" />');
+    expect(routes).toContain('<Stack.Screen name="(customer)" />');
 
     const redirect = fs.readFileSync(
-      path.join(t, "src/app/(auth)/index.tsx"),
+      path.join(t, "src/app/(customer)/index.tsx"),
       "utf8",
     );
-    expect(redirect).toContain('<Redirect href="/(auth)/onBoarding" />');
+    expect(redirect).toContain('<Redirect href="/(customer)/onBoarding" />');
   });
 
   it("refuses when app.json is missing", async () => {
     const t = mkTmp();
     await expect(
-      addRole("auth", {
+      addRole("customer", {
         target: t,
         promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
       }),
@@ -83,9 +83,9 @@ describe("addRole", () => {
   it("refuses when the role already exists (features dir)", async () => {
     const t = mkTmp();
     seedExpoApp(t);
-    fs.mkdirSync(path.join(t, "src/features/auth"), { recursive: true });
+    fs.mkdirSync(path.join(t, "src/features/customer"), { recursive: true });
     await expect(
-      addRole("auth", {
+      addRole("customer", {
         target: t,
         promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
       }),
@@ -98,13 +98,13 @@ describe("addRole", () => {
     fs.mkdirSync(path.join(t, "src/app"), { recursive: true });
     fs.writeFileSync(path.join(t, "src/app/routes.tsx"), "// no stack\n");
     await expect(
-      addRole("auth", {
+      addRole("customer", {
         target: t,
         promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
       }),
     ).rejects.toThrow(/expected shape/i);
-    expect(fs.existsSync(path.join(t, "src/features/auth"))).toBe(false);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/features/customer"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)"))).toBe(false);
   });
 
   it("rejects reserved role name", async () => {
@@ -118,12 +118,40 @@ describe("addRole", () => {
     ).rejects.toThrow(/reserved/i);
   });
 
+  it("refuses `auth` with a hint to use `add feature auth`", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    await expect(
+      addRole("auth", {
+        target: t,
+        promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
+      }),
+    ).rejects.toThrow(/should be a feature.*add feature auth/i);
+    // No writes happened.
+    expect(fs.existsSync(path.join(t, "src/features/auth"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/app/(auth)"))).toBe(false);
+  });
+
+  it("refuses when a standalone feature with the same name already exists", async () => {
+    const t = mkTmp();
+    seedExpoApp(t);
+    // Simulate a pre-existing standalone feature `merchant` (route group + features dir).
+    fs.mkdirSync(path.join(t, "src/features/merchant"), { recursive: true });
+    fs.mkdirSync(path.join(t, "src/app/(merchant)"), { recursive: true });
+    await expect(
+      addRole("merchant", {
+        target: t,
+        promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
+      }),
+    ).rejects.toThrow(/already exists/i);
+  });
+
   it("rollback: late failure removes all files just written", async () => {
     const t = mkTmp();
     seedExpoApp(t);
 
     await expect(
-      addRole("auth", {
+      addRole("customer", {
         target: t,
         promptInputs: async () => ({ feature: "dashboard", screen: "onBoarding" }),
         _failAfterWrites: true,
@@ -131,11 +159,11 @@ describe("addRole", () => {
     ).rejects.toThrow(/_failAfterWrites/);
 
     // None of the new files should remain on disk.
-    expect(fs.existsSync(path.join(t, "src/features/auth"))).toBe(false);
-    expect(fs.existsSync(path.join(t, "src/app/(auth)"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/features/customer"))).toBe(false);
+    expect(fs.existsSync(path.join(t, "src/app/(customer)"))).toBe(false);
     // routes.tsx is unchanged from seed.
     expect(
       fs.readFileSync(path.join(t, "src/app/routes.tsx"), "utf8"),
-    ).not.toContain('"(auth)"');
+    ).not.toContain('"(customer)"');
   });
 });

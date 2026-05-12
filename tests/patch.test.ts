@@ -7,6 +7,7 @@ import {
   bundleIdSegment,
   patchAppJson,
   patchAppJsonAssetPaths,
+  patchAppJsonBuildProperties,
   patchAppJsonPlugins,
   patchExpoRouterEntry,
   patchPackageJsonScripts,
@@ -203,6 +204,52 @@ describe("patchAppJsonPlugins", () => {
     expect(j.expo.plugins).toEqual([
       ["expo-image-picker", { photosPermission: "custom" }],
     ]);
+  });
+});
+
+describe("patchAppJsonBuildProperties", () => {
+  it("adds expo-build-properties with iOS 15.1 + Android minSdk 24", () => {
+    seedAppJson([]);
+    patchAppJsonBuildProperties(tmp);
+    const j = readAppJson();
+    expect(j.expo.plugins).toEqual([
+      [
+        "expo-build-properties",
+        {
+          ios: { deploymentTarget: "15.1" },
+          android: { minSdkVersion: 24 },
+        },
+      ],
+    ]);
+  });
+
+  it("idempotent + preserves a user-customized entry on rerun", () => {
+    seedAppJson([
+      [
+        "expo-build-properties",
+        { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } },
+      ],
+    ]);
+    patchAppJsonBuildProperties(tmp);
+    const j = readAppJson();
+    // User's overrides preserved — nameOf-based dedupe means we do NOT
+    // overwrite an existing entry's options.
+    expect(j.expo.plugins).toEqual([
+      [
+        "expo-build-properties",
+        { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } },
+      ],
+    ]);
+  });
+
+  it("coexists with other plugin entries (appends, doesn't replace)", () => {
+    seedAppJson(["expo-router", ["expo-image-picker", { photosPermission: "x" }]]);
+    patchAppJsonBuildProperties(tmp);
+    const plugins = readAppJson().expo.plugins;
+    expect(plugins).toHaveLength(3);
+    expect(plugins[0]).toBe("expo-router");
+    expect(plugins[1][0]).toBe("expo-image-picker");
+    expect(plugins[2][0]).toBe("expo-build-properties");
   });
 });
 

@@ -50,6 +50,7 @@ describe("buildAlwaysInstalledList", () => {
     expect(list).toContain("expo-constants"); // Deviation #11
     expect(list).toContain("react-native-nitro-modules"); // Deviation #18 (mmkv 3.x+ peer)
     expect(list).toContain("expo-system-ui"); // Deviation #18 (userInterfaceStyle)
+    expect(list).toContain("expo-build-properties"); // pins iOS deploymentTarget — silences SDWebImage warning
   });
 });
 

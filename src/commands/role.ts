@@ -6,6 +6,7 @@ import { log } from "../util.js";
 import { printFilesChanged } from "../add.js";
 import {
   assertExpoApp,
+  assertNotRoleRefusal,
   assertRoleName,
   assertFeatureName,
   assertScreenName,
@@ -16,6 +17,7 @@ import {
   roleExists,
   routeFileExists,
   rollback,
+  topLevelNameTaken,
   writeFeatureTypes,
   writeRoleGroup,
   writeRouteReExport,
@@ -77,8 +79,15 @@ export async function addRole(
   }
   const role = assertRoleName(roleRaw!);
 
-  // 2. role-existence guard
-  if (roleExists(target, role)) {
+  // 1a. hardcoded refusal — names that should be standalone features, not
+  // roles (e.g. `auth`). Throws with a hint to use `add feature <name>`.
+  assertNotRoleRefusal(role);
+
+  // 2. role-existence guard. `topLevelNameTaken` reports partial states
+  // (groupOnly / featuresOnly) for clearer diagnostics; if either exists, we
+  // refuse — a hierarchical role and a standalone feature share namespace.
+  const taken = topLevelNameTaken(target, role);
+  if (taken || roleExists(target, role)) {
     throw new Error(
       `Role "${role}" already exists (src/features/${role} or src/app/(${role}) is present).`,
     );
