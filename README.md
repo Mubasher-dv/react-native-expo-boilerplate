@@ -91,11 +91,13 @@ Rebuild after: `npx expo prebuild --clean` (regenerates `ios/` + `android/` from
 
 iOS Simulator has the same caching behavior — delete the app from the simulator (long-press → Remove App) then rerun `yarn ios`.
 
-**`splash`** — interactively prompts for a background color (hex, default `#ffffff`) + a centered image path. Then:
+**`splash`** — interactively prompts for a background color (hex, default `#ffffff`), a centered image path, and an `imageWidth` in dp (default `150`, Android-12+-safe). Then:
 
 1. Runs `expo install expo-splash-screen` (mandatory — the plugin entry in `app.json` fails to resolve at `expo prebuild` time without the package installed; you'll see `PluginError: Failed to resolve plugin for module "expo-splash-screen"` if this step is skipped).
 2. Copies the source to `src/assets/splash-icon.png`.
-3. Writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and `imageWidth: 200`. Also writes a `dark: { backgroundColor: <same color> }` block so dark-mode devices don't get a default-color flash (edit `app.json` afterwards if you want a different dark color or to set a `dark.image`). Merge-preserves any existing `dark.image` / `ios` / `android` sub-blocks. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+3. Writes the `expo-splash-screen` plugin entry to `app.json` with `resizeMode: "contain"` and your chosen `imageWidth`. Also writes a `dark: { backgroundColor: <same color> }` block so dark-mode devices don't get a default-color flash (edit `app.json` afterwards if you want a different dark color or to set a `dark.image`). Merge-preserves any existing `dark.image` / `ios` / `android` sub-blocks. If a legacy `expo.splash` field is present, that's updated to match (defensive).
+
+   **About `imageWidth`**: Android 12+ renders the splash icon inside a 192dp × 192dp canvas (Material You spec). Values above 192 overflow the canvas and Android crops the left + right edges — the cause of "splash image cut on Android but fine on iOS" reports. Default `150` sits inside the canvas with breathing room for circular / squircle launcher masks; matches Expo's own Android-platform docs example. iOS has no equivalent constraint, so `imageWidth` only really affects Android rendering quality there. Source image content should sit within the central ~66% of the icon — content too close to the edges gets clipped by the launcher mask regardless of `imageWidth`.
 4. Splices `SplashScreen.preventAutoHideAsync()` (module scope) + `useEffect(() => SplashScreen.hideAsync(), [])` (inside `RootLayout`) into `src/app/_layout.tsx`. Without this, Expo auto-hides the splash the moment the JS bundle loads (before the layout mounts), and your configured splash never actually renders. Idempotent — skips on re-run, and merges `useEffect` into an existing `from "react"` import rather than adding a duplicate line.
 
 ```bash

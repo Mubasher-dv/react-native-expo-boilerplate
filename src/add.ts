@@ -797,6 +797,24 @@ const DEFAULT_SPLASH_COLOR = "#ffffff";
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 /**
+ * Default `imageWidth` (in dp) for the splash icon.
+ *
+ * Sized for the Android 12+ Material You adaptive splash icon canvas, which
+ * is 192dp × 192dp. Values > 192 overflow the canvas and Android crops the
+ * left + right edges (the user-reported "cutting" bug in v0.2.2). iOS has no
+ * equivalent canvas constraint, so it would have rendered fine at 200 — the
+ * historic Expo example default — which is exactly why the user saw the
+ * issue on Android but not iOS.
+ *
+ * Matches Expo's own Android-platform-specific docs example (uses 150 for
+ * Android). 150 sits comfortably inside the 192dp canvas with breathing room
+ * for the launcher's circular / squircle mask on edge-bleed devices.
+ */
+const DEFAULT_SPLASH_IMAGE_WIDTH = 150;
+const MIN_SPLASH_IMAGE_WIDTH = 50;
+const MAX_SPLASH_IMAGE_WIDTH = 400;
+
+/**
  * Mutator for `app.json` splash config — exposed for testing.
  *
  * Writes the modern `expo-splash-screen` plugin entry (SDK 50+). If a legacy
@@ -804,11 +822,16 @@ const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
  * updated to match so a downgraded SDK still picks up the change. Idempotent:
  * re-running with the same values is a no-op; running with new values updates
  * in place (merges into existing plugin options).
+ *
+ * `imageWidth` defaults to `DEFAULT_SPLASH_IMAGE_WIDTH` (150) — Android 12+
+ * splash icon canvas safe value. Callers (the recipe) prompt the user for
+ * this and pass it through.
  */
 export function setSplashConfig(
   target: string,
   color: string,
   imageRelPath: string,
+  imageWidth: number = DEFAULT_SPLASH_IMAGE_WIDTH,
 ): void {
   mutateAppJson(target, (json) => {
     json.expo ??= {};
@@ -817,7 +840,7 @@ export function setSplashConfig(
     // Light/default options.
     const options: Record<string, unknown> = {
       image: imageRelPath,
-      imageWidth: 200,
+      imageWidth,
       resizeMode: "contain",
       backgroundColor: color,
     };
@@ -1074,6 +1097,30 @@ export async function addSplash(target: string): Promise<void> {
   const imagePath = String(imageAns.imagePath ?? "").trim();
   if (!imagePath) throw new Error("Aborted.");
 
+  const widthAns = await prompts(
+    {
+      type: "number",
+      name: "imageWidth",
+      message:
+        `Splash image width in dp (Android 12+ icon canvas is 192dp — values above this crop on newer Android; iOS is unconstrained). Default ${DEFAULT_SPLASH_IMAGE_WIDTH}`,
+      initial: DEFAULT_SPLASH_IMAGE_WIDTH,
+      validate: (v: number) =>
+        Number.isInteger(v) &&
+        v >= MIN_SPLASH_IMAGE_WIDTH &&
+        v <= MAX_SPLASH_IMAGE_WIDTH
+          ? true
+          : `Must be an integer between ${MIN_SPLASH_IMAGE_WIDTH} and ${MAX_SPLASH_IMAGE_WIDTH}`,
+    },
+    { onCancel: () => process.exit(1) },
+  );
+  const imageWidth = Number(widthAns.imageWidth ?? DEFAULT_SPLASH_IMAGE_WIDTH);
+  if (imageWidth > 192) {
+    log.warn(
+      `imageWidth=${imageWidth} > 192dp — may crop on Android 12+ Material You splash canvas. ` +
+        "Drop to 150–192 if you see left/right edges cut on Android.",
+    );
+  }
+
   const absSrc = resolveUserPath(target, imagePath);
   const dims = readPngDimensions(absSrc);
   if (dims) log.info(`Splash image dimensions: ${dims.width}×${dims.height}`);
@@ -1091,7 +1138,7 @@ export async function addSplash(target: string): Promise<void> {
   fs.copyFileSync(absSrc, splashDest);
 
   log.step("Writing expo-splash-screen plugin entry to app.json …");
-  setSplashConfig(target, color, "./src/assets/splash-icon.png");
+  setSplashConfig(target, color, "./src/assets/splash-icon.png", imageWidth);
 
   log.step("Wiring SplashScreen.hideAsync() into src/app/_layout.tsx …");
   patchLayoutForSplash(target);
@@ -1100,11 +1147,13 @@ export async function addSplash(target: string): Promise<void> {
   log.raw("");
   log.raw(`  backgroundColor : ${color}`);
   log.raw(`  image           : src/assets/splash-icon.png`);
-  log.raw(`  imageWidth      : 200 (centered, contain)`);
+  log.raw(`  imageWidth      : ${imageWidth}dp (centered, contain)`);
   log.raw("");
   log.info(
     'Adjust `imageWidth` / `resizeMode` in app.json plugins["expo-splash-screen"] ' +
-      "if the centered image renders too small or too large.",
+      "if the centered image renders too small or too large. Source image content " +
+      "should sit within the central ~66% of the canvas — content too close to the " +
+      "edges gets clipped by Android's launcher mask regardless of imageWidth.",
   );
 
   printFilesChanged([

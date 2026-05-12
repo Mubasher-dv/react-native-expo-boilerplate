@@ -542,7 +542,7 @@ describe("setIconConfig", () => {
 describe("setSplashConfig", () => {
   const IMG = "./src/assets/splash-icon.png";
 
-  it("appends expo-splash-screen plugin entry with full options INCLUDING dark block", () => {
+  it("appends expo-splash-screen plugin entry with full options INCLUDING dark block (default imageWidth 150)", () => {
     writeAppJson([]);
     setSplashConfig(tmp, "#ff0000", IMG);
     const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
@@ -554,11 +554,27 @@ describe("setSplashConfig", () => {
     const opts = (entry as [string, Record<string, unknown>])[1];
     expect(opts).toEqual({
       image: IMG,
-      imageWidth: 200,
+      imageWidth: 150,
       resizeMode: "contain",
       backgroundColor: "#ff0000",
       dark: { backgroundColor: "#ff0000" },
     });
+  });
+
+  it("honors explicit imageWidth argument", () => {
+    writeAppJson([]);
+    setSplashConfig(tmp, "#ffffff", IMG, 180);
+    const json = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
+    const opts = json.expo.plugins[0][1];
+    expect(opts.imageWidth).toBe(180);
+  });
+
+  it("imageWidth default (150) fits Android 12+ 192dp splash canvas", () => {
+    writeAppJson([]);
+    setSplashConfig(tmp, "#ffffff", IMG);
+    const opts = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"))
+      .expo.plugins[0][1];
+    expect(opts.imageWidth).toBeLessThanOrEqual(192);
   });
 
   it("dark.backgroundColor mirrors the light backgroundColor by default", () => {
