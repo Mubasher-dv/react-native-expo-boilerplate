@@ -1,6 +1,6 @@
 {
   "name": "react-native-expo-boilerplate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Opinionated Expo app scaffolder mirroring MyRoster conventions.",
   "type": "module",
   "bin": {
