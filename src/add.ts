@@ -31,12 +31,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execa } from "execa";
 import prompts from "prompts";
 import { applyBottomSheet, applyImagePicker } from "./overlay.js";
 import type { PackageManager } from "./prompts.js";
-import { detectPackageManager } from "./prompts.js";
-import { ensureDir, fileExists, log } from "./util.js";
+import { ensureDir, log } from "./util.js";
+import {
+  assertExpoApp,
+  detectProjectPm,
+  expoInstall,
+  fileExists,
+} from "./projectFs.js";
+import { regenerateFontsMarkerBlock } from "./fontsInstaller.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,38 +50,6 @@ function resolveTemplatesRoot(): string {
   return path.resolve(__dirname, "..", "templates");
 }
 
-/**
- * Reject early if the target is not an Expo project. `app.json` is the
- * minimum signal; we don't require `src/` because the user may have moved
- * things around — only the constants splice (image-picker only) hard-depends
- * on `src/core/utils/constants.ts`, and it errors loudly if that's missing.
- */
-function assertExpoApp(target: string): void {
-  if (!fileExists(path.join(target, "app.json"))) {
-    throw new Error(
-      `Not an Expo project: app.json missing in ${target}. ` +
-        `Run \`add\` from the project root.`,
-    );
-  }
-}
-
-/**
- * Determine PM from the project's lockfile. Authoritative — `detectPackageManager`
- * probes the host machine, not the target project. Falls back to host probe
- * only when neither lockfile is present (shouldn't happen post-scaffold).
- */
-async function detectProjectPm(target: string): Promise<PackageManager> {
-  if (fileExists(path.join(target, "yarn.lock"))) return "yarn";
-  if (fileExists(path.join(target, "package-lock.json"))) return "npm";
-  log.warn("No lockfile detected; falling back to host PM probe.");
-  return detectPackageManager();
-}
-
-/**
- * Single-package `expo install` wrapper. Passes the PM flag — modern Expo CLI
- * honors it; older versions may produce a mismatched lockfile, in which case
- * the user already has the issue from initial scaffold and is on their own.
- */
 /**
  * Print the dev-client rebuild reminder. Both libraries ship native modules
  * (`@gorhom/bottom-sheet` and `expo-image-picker` both link native code) — the
@@ -127,24 +100,6 @@ export function printFilesChanged(
 /** PM-correct lockfile basename for the "Files changed" list. */
 function lockfileFor(pm: PackageManager): string {
   return pm === "yarn" ? "yarn.lock" : "package-lock.json";
-}
-
-async function expoInstall(
-  target: string,
-  pkg: string,
-  pm: PackageManager,
-): Promise<void> {
-  const args = [
-    "--yes",
-    "expo",
-    "install",
-    pkg,
-    pm === "yarn" ? "--yarn" : "--npm",
-  ];
-  const result = await execa("npx", args, { cwd: target, stdio: "inherit" });
-  if (result.exitCode !== 0) {
-    throw new Error(`expo install ${pkg} failed (exit ${result.exitCode}).`);
-  }
 }
 
 // ---------- bottom-sheet ----------
@@ -951,14 +906,6 @@ export function patchLayoutForSplash(target: string): void {
   }
   const original = fs.readFileSync(p, "utf8");
 
-  // Idempotency guard.
-  if (original.includes("SplashScreen.hideAsync")) {
-    log.info(
-      "SplashScreen wiring already present in _layout.tsx; skipping splice.",
-    );
-    return;
-  }
-
   // Sanity: must have a RootLayout function to splice into.
   if (!/export\s+default\s+function\s+RootLayout\s*\(/.test(original)) {
     log.warn(
@@ -973,50 +920,37 @@ export function patchLayoutForSplash(target: string): void {
     return;
   }
 
-  let lines = original.split("\n");
+  // C1 (rev 3): substring guard `original.includes("SplashScreen.hideAsync")`
+  // REMOVED. Per-insert idempotency below handles re-runs.
 
-  // ----- Step 1: ensure `useEffect` is imported from "react" -----
-  const reactNamedRe =
-    /^\s*import\s+\{([^}]*)\}\s+from\s+["']react["']\s*;?\s*$/;
-  let useEffectImported = false;
-  let mergedIntoReactImport = false;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(reactNamedRe);
-    if (!m) continue;
-    if (/\buseEffect\b/.test(m[1])) {
-      useEffectImported = true;
-      break;
+  const markerBlockPresent = original.includes("// codingpixel:fonts-start");
+
+  if (markerBlockPresent) {
+    // Defer the useEffect to fonts module's marker block. regenerateFontsMarkerBlock
+    // re-detects hasSplashScreen (now true after splash install) and rewrites in place.
+    // If sidecar is missing (e.g. user wiped fonts manually), fall back to standalone.
+    const regenResult = regenerateFontsMarkerBlock(target);
+    if (regenResult.reason === "no-sidecar") {
+      insertStandaloneSplashUseEffect(target);
     }
-    const inner = m[1].trim().replace(/,\s*$/, "");
-    const merged = inner.length === 0 ? "useEffect" : `${inner}, useEffect`;
-    lines[i] = lines[i].replace(
-      reactNamedRe,
-      `import { ${merged} } from "react";`,
-    );
-    useEffectImported = true;
-    mergedIntoReactImport = true;
-    break;
+  } else {
+    insertStandaloneSplashUseEffect(target);
   }
 
-  // ----- Step 2: find end of import block; insert SplashScreen import (+ react import if not merged) -----
-  let lastImportIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
-  }
-  if (lastImportIdx === -1) {
-    log.warn(
-      "No `import` statements found in _layout.tsx — aborting splash layout splice.",
-    );
+  ensureSplashImportsAndModuleCall(target);
+}
+
+// ---------- splash private helpers ----------
+
+/** Splash recipe's original useEffect splice. Only invoked when no marker block. */
+function insertStandaloneSplashUseEffect(target: string): void {
+  const p = path.join(target, "src/app/_layout.tsx");
+  const original = fs.readFileSync(p, "utf8");
+  // Precise idempotency: standalone empty-deps useEffect-with-hideAsync.
+  if (/useEffect\s*\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?SplashScreen\.hideAsync\(\)/.test(original)) {
     return;
   }
-  const inserts: string[] = [];
-  if (!useEffectImported && !mergedIntoReactImport) {
-    inserts.push(`import { useEffect } from "react";`);
-  }
-  inserts.push(`import * as SplashScreen from "expo-splash-screen";`);
-  lines.splice(lastImportIdx + 1, 0, ...inserts);
-
-  // ----- Step 3: insert `SplashScreen.preventAutoHideAsync();` before RootLayout -----
+  const lines = original.split("\n");
   let rootIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     if (/export\s+default\s+function\s+RootLayout\s*\(/.test(lines[i])) {
@@ -1024,52 +958,77 @@ export function patchLayoutForSplash(target: string): void {
       break;
     }
   }
-  if (rootIdx === -1) {
-    log.warn(
-      "Lost track of RootLayout after import splice — aborting splash layout splice.",
-    );
-    return;
-  }
-  // Ensure a blank line above the new module-level call for readability.
-  const moduleBlock = [
-    "// Splash recipe — keep the native splash visible until the JS layout has",
-    "// mounted, then hide it from the useEffect inside RootLayout.",
-    "SplashScreen.preventAutoHideAsync();",
-    "",
-  ];
-  // Strip a trailing blank line above rootIdx so we don't end up with two blanks.
-  if (lines[rootIdx - 1] !== undefined && lines[rootIdx - 1].trim() === "") {
-    lines.splice(rootIdx, 0, ...moduleBlock);
-  } else {
-    lines.splice(rootIdx, 0, "", ...moduleBlock);
-  }
-
-  // ----- Step 4: insert useEffect as first statement in RootLayout body -----
-  // Re-locate RootLayout.
-  rootIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (/export\s+default\s+function\s+RootLayout\s*\(/.test(lines[i])) {
-      rootIdx = i;
-      break;
-    }
-  }
-  if (rootIdx === -1) {
-    log.warn(
-      "Lost track of RootLayout after module-block splice — aborting useEffect splice.",
-    );
-    return;
-  }
-  // Function opening brace is on the same line in our template. Insert right after.
-  const useEffectBlock = [
+  if (rootIdx === -1) return;
+  const block = [
     "  // Splash recipe — pair with SplashScreen.preventAutoHideAsync() above.",
     "  useEffect(() => {",
     "    SplashScreen.hideAsync();",
     "  }, []);",
     "",
   ];
-  lines.splice(rootIdx + 1, 0, ...useEffectBlock);
-
+  lines.splice(rootIdx + 1, 0, ...block);
   fs.writeFileSync(p, lines.join("\n"));
+}
+
+/** Insert SplashScreen import + useEffect import + preventAutoHideAsync(). Each guarded by its own precondition. */
+function ensureSplashImportsAndModuleCall(target: string): void {
+  const p = path.join(target, "src/app/_layout.tsx");
+  let content = fs.readFileSync(p, "utf8");
+
+  // useEffect import.
+  const reactNamedRe = /^\s*import\s+\{([^}]*)\}\s+from\s+["']react["']\s*;?\s*$/m;
+  const m = content.match(reactNamedRe);
+  if (m && !/\buseEffect\b/.test(m[1])) {
+    const inner = m[1].trim().replace(/,\s*$/, "");
+    const merged = inner.length === 0 ? "useEffect" : `${inner}, useEffect`;
+    content = content.replace(reactNamedRe, `import { ${merged} } from "react";`);
+  } else if (!m && !/import\s+\{[^}]*\buseEffect\b[^}]*\}\s+from\s+["']react["']/.test(content)) {
+    content = insertAfterLastImport(content, `import { useEffect } from "react";`);
+  }
+
+  // SplashScreen import.
+  if (!/from\s+["']expo-splash-screen["']/.test(content)) {
+    content = insertAfterLastImport(content, `import * as SplashScreen from "expo-splash-screen";`);
+  }
+
+  // preventAutoHideAsync() module-scope call.
+  if (!/^SplashScreen\.preventAutoHideAsync\(\)/m.test(content)) {
+    const lines = content.split("\n");
+    let rootIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (/export\s+default\s+function\s+RootLayout\s*\(/.test(lines[i])) {
+        rootIdx = i;
+        break;
+      }
+    }
+    if (rootIdx >= 0) {
+      const moduleBlock = [
+        "// Splash recipe — keep the native splash visible until the JS layout has",
+        "// mounted, then hide it from the useEffect inside RootLayout.",
+        "SplashScreen.preventAutoHideAsync();",
+        "",
+      ];
+      if (lines[rootIdx - 1] !== undefined && lines[rootIdx - 1].trim() === "") {
+        lines.splice(rootIdx, 0, ...moduleBlock);
+      } else {
+        lines.splice(rootIdx, 0, "", ...moduleBlock);
+      }
+      content = lines.join("\n");
+    }
+  }
+
+  fs.writeFileSync(p, content);
+}
+
+function insertAfterLastImport(content: string, lineToInsert: string): string {
+  const lines = content.split("\n");
+  let lastImportIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
+  }
+  if (lastImportIdx === -1) return `${lineToInsert}\n${content}`;
+  lines.splice(lastImportIdx + 1, 0, lineToInsert);
+  return lines.join("\n");
 }
 
 /**

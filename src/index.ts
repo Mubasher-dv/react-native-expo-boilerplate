@@ -12,6 +12,7 @@
 //   → success message
 
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolveTargetDir } from "./bootstrap.js";
 import { runAdd } from "./add.js";
@@ -36,6 +37,12 @@ import {
 } from "./patch.js";
 import { patchBabel } from "./babel.js";
 import { buildLayoutReplacements } from "./fonts.js";
+import {
+  checkPackageExists,
+  installAndCopy,
+  writeSidecar,
+  type InstalledFamily,
+} from "./fontsInstaller.js";
 import { ensureLockfile, installNativeDeps } from "./install.js";
 import { ensureDir, log } from "./util.js";
 import { readSDKNotes } from "./sdkNotes.js";
@@ -95,6 +102,11 @@ async function main(): Promise<void> {
   if (argv[0] === "add" && argv[1] === "bottom-tab") {
     const { addBottomTab } = await import("./commands/bottomTab.js");
     await addBottomTab(argv[2]);
+    return;
+  }
+  if (argv[0] === "add" && argv[1] === "fonts") {
+    const { addFonts } = await import("./commands/fonts.js");
+    await addFonts();
     return;
   }
   // `add screen` — arity dispatch:
@@ -159,6 +171,53 @@ async function main(): Promise<void> {
     applyImagePicker(target.dir, templatesRoot);
   }
 
+  // ---- Font install (post-base, pre-patches) ----
+  let primaryInstalled: InstalledFamily | null = null;
+  let secondaryInstalled: InstalledFamily | null = null;
+  if (answers.primaryFont) {
+    try {
+      const familiesToCheck = answers.secondaryFont
+        ? [answers.primaryFont, answers.secondaryFont]
+        : [answers.primaryFont];
+      const checks = await Promise.allSettled(
+        familiesToCheck.map((f) => checkPackageExists(f)),
+      );
+      const failures = checks
+        .map((r, i) =>
+          r.status === "rejected"
+            ? { family: familiesToCheck[i], err: r.reason as Error }
+            : null,
+        )
+        .filter((x): x is { family: string; err: Error } => x !== null);
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures.map((f) => f.err),
+          `Font pre-check failed for: ${failures.map((f) => f.family).join(", ")}`,
+        );
+      }
+
+      log.step(`Installing primary font "${answers.primaryFont}" via tarball fetch …`);
+      primaryInstalled = await installAndCopy(target.dir, answers.primaryFont, "primary");
+      if (answers.secondaryFont) {
+        log.step(`Installing secondary font "${answers.secondaryFont}" via tarball fetch …`);
+        secondaryInstalled = await installAndCopy(target.dir, answers.secondaryFont, "secondary");
+      }
+      writeSidecar(target.dir, {
+        schemaVersion: 1,
+        markerSyntax: "codingpixel:fonts",
+        primary: primaryInstalled,
+        secondary: secondaryInstalled,
+      });
+    } catch (err) {
+      log.warn(
+        `Font setup failed: ${err instanceof Error ? err.message : String(err)}. ` +
+          `Continuing scaffold without fonts. Re-run \`react-native-expo-boilerplate add fonts\` later.`,
+      );
+      primaryInstalled = null;
+      secondaryInstalled = null;
+    }
+  }
+
   // ---- Patches ----
   log.step("Patching app.json + expo-router entry …");
   patchAppJson(target.dir, target.name, answers);
@@ -169,7 +228,19 @@ async function main(): Promise<void> {
 
   log.step("Splicing constants + layout sentinels …");
   patchConstants(target.dir, templatesRoot, answers);
-  patchLayout(target.dir, buildLayoutReplacements(answers));
+  // Fonts recipe never adds expo-splash-screen — splash recipe owns that dep.
+  // At scaffold time, expo-splash-screen is not yet installed, so hasSplashScreen=false.
+  patchLayout(
+    target.dir,
+    buildLayoutReplacements(answers, primaryInstalled, secondaryInstalled, false),
+  );
+
+  // Rewrite src/ui/theme/fonts.ts when fonts installed (else template stays untouched).
+  if (primaryInstalled) {
+    const { generateFontsEnumFile } = await import("./fonts.js");
+    const fontsPath = path.join(target.dir, "src/ui/theme/fonts.ts");
+    fs.writeFileSync(fontsPath, generateFontsEnumFile(primaryInstalled, secondaryInstalled));
+  }
 
   log.step("Patching README.md app-name placeholder …");
   patchReadme(target.dir, target.name);

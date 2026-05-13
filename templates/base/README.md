@@ -65,6 +65,7 @@ Path aliases (configured in `tsconfig.json` + `babel.config.js`):
 Add anything you skipped during scaffold — run from this directory:
 
 ```bash
+npx react-native-expo-boilerplate add fonts            # interactive: Google Fonts family → installs TTFs + rewrites Fonts enum + wires useFonts in _layout.tsx
 npx react-native-expo-boilerplate add bottom-sheet     # @gorhom/bottom-sheet + 5 components
 npx react-native-expo-boilerplate add image-picker     # expo-image-picker + PermissionService + constants
 npx react-native-expo-boilerplate add app-icon         # interactive: source path → updates app.json + copies asset
@@ -73,6 +74,7 @@ npx react-native-expo-boilerplate add splash           # interactive: color + im
 
 Rebuild after each recipe:
 
+- `fonts` → **no rebuild** — `expo-font` is already installed; just restart Metro (`yarn start`).
 - Library recipes (`bottom-sheet`, `image-picker`) → `yarn ios` / `yarn android` (links new native module into dev-client).
 - Asset recipes (`app-icon`, `splash`) → `npx expo prebuild --clean` then `yarn ios` / `yarn android` (regenerates ios/ + android/ from app.json).
 
@@ -106,7 +108,20 @@ Defaults to `com.<app-name-no-dashes>`. Edit `app.json` `expo.ios.bundleIdentifi
 
 ## Fonts
 
-Disabled by default — `src/ui/theme/fonts.ts` exports `Fonts = {} as const`. To enable: drop `.ttf` files into `src/assets/fonts/`, populate `Fonts`, add `useFonts(...)` + a loading guard in `src/app/_layout.tsx`. `expo-font` is already installed.
+Disabled by default — `src/ui/theme/fonts.ts` exports an empty `Fonts` enum. To add Google Fonts:
+
+```bash
+npx react-native-expo-boilerplate add fonts
+```
+
+Prompts for a primary (and optional secondary) [Google Fonts](https://fonts.google.com/) family name (e.g. `Inter`, `Roboto`). Behind the scenes it:
+
+1. Fetches the `@expo-google-fonts/<family>` tarball from npm
+2. Copies the selected `.ttf` files to `src/assets/fonts/`
+3. Rewrites `src/ui/theme/fonts.ts` with a typed `Fonts` enum
+4. Injects `useFonts(...)` + loading guard into `src/app/_layout.tsx`
+
+Re-runnable to swap or remove fonts. No native rebuild needed (`expo-font` is already installed — just restart Metro).
 
 <!-- ## License
 

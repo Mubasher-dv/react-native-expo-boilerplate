@@ -5,63 +5,13 @@ import path from "node:path";
 import {
   buildLayoutReplacements,
   generateBottomSheetProviderBlocks,
-  generateFontsObject,
-  generateUseFontsBlocks,
 } from "../src/fonts.js";
 import { patchLayout } from "../src/patch.js";
 import type { Answers } from "../src/prompts.js";
 
-describe("generateFontsObject", () => {
-  it("primary only — emits 4 weights + FontKey type", () => {
-    const out = generateFontsObject("Inter", "");
-    expect(out).toContain('REGULAR: "Inter-Regular"');
-    expect(out).toContain('BOLD: "Inter-Bold"');
-    expect(out).toContain("FontKey = keyof typeof Fonts");
-    expect(out).not.toContain("SECONDARY_");
-  });
-
-  it("primary + secondary — emits 8 weights", () => {
-    const out = generateFontsObject("Inter", "Roboto");
-    expect(out).toContain('SECONDARY_REGULAR: "Roboto-Regular"');
-    expect(out).toContain('SECONDARY_BOLD: "Roboto-Bold"');
-  });
-
-  it("empty primary — emits empty Fonts + FontKey = never", () => {
-    const out = generateFontsObject("", "");
-    expect(out).toMatch(/Fonts = \{\s*\} as const;/);
-    expect(out).toContain("FontKey = keyof typeof Fonts");
-  });
-
-  it("uses object literal `as const` (NOT TS enum)", () => {
-    const out = generateFontsObject("Inter", "");
-    expect(out).not.toMatch(/\benum\b/);
-    expect(out).toContain("as const");
-  });
-});
-
-describe("generateUseFontsBlocks", () => {
-  it("empty primary — all 3 blocks empty", () => {
-    const r = generateUseFontsBlocks("", "");
-    expect(r).toEqual({ importBlock: "", hookBlock: "", guardBlock: "" });
-  });
-
-  it("primary only — 4 require()s in hook", () => {
-    const r = generateUseFontsBlocks("Inter", "");
-    expect(r.importBlock).toContain('useFonts');
-    expect(r.hookBlock.match(/require\(/g)?.length).toBe(4);
-    expect(r.guardBlock).toContain("if (!loaded) return null;");
-  });
-
-  it("primary + secondary — 8 require()s", () => {
-    const r = generateUseFontsBlocks("Inter", "Roboto");
-    expect(r.hookBlock.match(/require\(/g)?.length).toBe(8);
-  });
-
-  it("require paths point at ../assets/fonts/ (assets moved to src/assets, Deviation #22)", () => {
-    const r = generateUseFontsBlocks("Inter", "");
-    expect(r.hookBlock).toContain('"../assets/fonts/Inter-Regular.ttf"');
-  });
-});
+// generateFontsObject was removed in the new font recipe implementation.
+// New API: generateFontsEnumFile(InstalledFamily|null, InstalledFamily|null)
+// See tests/fonts.generator.test.ts for full coverage of the new API.
 
 describe("generateBottomSheetProviderBlocks", () => {
   it("false — empty triple", () => {
@@ -85,7 +35,7 @@ describe("generateBottomSheetProviderBlocks", () => {
 let target: string;
 
 beforeEach(() => {
-  target = fs.mkdtempSync(path.join(os.tmpdir(), "cpx-fonts-"));
+  target = fs.mkdtempSync(path.join(os.tmpdir(), "rneb-fonts-"));
   fs.mkdirSync(path.join(target, "src/app"), { recursive: true });
   fs.mkdirSync(path.join(target, "src/ui/theme"), { recursive: true });
 
@@ -111,9 +61,6 @@ beforeEach(() => {
       ``,
     ].join("\n"),
   );
-
-  // Deviation #10: fonts.ts ships static (no FONTS_OBJECT sentinel).
-  // patchLayout no longer touches it; only _layout.tsx is patched.
 });
 
 afterEach(() => {
@@ -130,7 +77,7 @@ const A: Answers = {
 
 describe("patchLayout end-to-end", () => {
   it("no fonts + no bottom-sheet → all sentinel lines dropped, zero residue", () => {
-    patchLayout(target, buildLayoutReplacements(A));
+    patchLayout(target, buildLayoutReplacements(A, null, null, false));
     const layout = fs.readFileSync(
       path.join(target, "src/app/_layout.tsx"),
       "utf8",
@@ -140,15 +87,35 @@ describe("patchLayout end-to-end", () => {
     expect(layout).not.toContain("useFonts");
   });
 
+  it("bottom-sheet only (no fonts) → provider injected, no useFonts residue", () => {
+    patchLayout(target, buildLayoutReplacements({ ...A, bottomSheet: true }, null, null, false));
+    const layout = fs.readFileSync(
+      path.join(target, "src/app/_layout.tsx"),
+      "utf8",
+    );
+    expect(layout).not.toMatch(/@@[A-Z_]+@@/);
+    expect(layout).toContain("<BottomSheetModalProvider>");
+    expect(layout).toContain("</BottomSheetModalProvider>");
+    expect(layout).not.toContain("useFonts");
+  });
+
   it("primary font + bottom-sheet → injected blocks present, zero residue", () => {
+    const primary = {
+      displayName: "Inter",
+      fileBase: "Inter",
+      variants: [
+        { google: "regular", enumKey: "REGULAR", suffix: "-Regular" },
+        { google: "700", enumKey: "BOLD", suffix: "-Bold" },
+      ],
+    };
     patchLayout(
       target,
-      buildLayoutReplacements({
-        ...A,
-        primaryFont: "Inter",
-        secondaryFont: "Roboto",
-        bottomSheet: true,
-      }),
+      buildLayoutReplacements(
+        { ...A, primaryFont: "Inter", bottomSheet: true },
+        primary,
+        null,
+        false,
+      ),
     );
     const layout = fs.readFileSync(
       path.join(target, "src/app/_layout.tsx"),
@@ -156,8 +123,47 @@ describe("patchLayout end-to-end", () => {
     );
     expect(layout).not.toMatch(/@@[A-Z_]+@@/);
     expect(layout).toContain("useFonts");
-    expect(layout).toContain("if (!loaded) return null;");
+    expect(layout).toContain("codingpixel:fonts-start");
     expect(layout).toContain("<BottomSheetModalProvider>");
     expect(layout).toContain("</BottomSheetModalProvider>");
+  });
+
+  it("primary + hasSplashScreen → SplashScreen.hideAsync inside marker block", () => {
+    const primary = {
+      displayName: "Inter",
+      fileBase: "Inter",
+      variants: [{ google: "regular", enumKey: "REGULAR", suffix: "-Regular" }],
+    };
+    patchLayout(target, buildLayoutReplacements({ ...A, primaryFont: "Inter" }, primary, null, true));
+    const layout = fs.readFileSync(path.join(target, "src/app/_layout.tsx"), "utf8");
+    expect(layout).toContain("SplashScreen.hideAsync");
+    expect(layout).toContain("codingpixel:fonts-start");
+    expect(layout).not.toMatch(/@@[A-Z_]+@@/);
+  });
+
+  it("primary + secondary → both font families' require()s in hook", () => {
+    const primary = {
+      displayName: "Inter",
+      fileBase: "Inter",
+      variants: [{ google: "regular", enumKey: "REGULAR", suffix: "-Regular" }],
+    };
+    const secondary = {
+      displayName: "Roboto",
+      fileBase: "Roboto",
+      variants: [{ google: "regular", enumKey: "REGULAR", suffix: "-Regular" }],
+    };
+    patchLayout(
+      target,
+      buildLayoutReplacements(
+        { ...A, primaryFont: "Inter", secondaryFont: "Roboto" },
+        primary,
+        secondary,
+        false,
+      ),
+    );
+    const layout = fs.readFileSync(path.join(target, "src/app/_layout.tsx"), "utf8");
+    expect(layout).toContain("Inter-Regular");
+    expect(layout).toContain("Roboto-Regular");
+    expect(layout).not.toMatch(/@@[A-Z_]+@@/);
   });
 });

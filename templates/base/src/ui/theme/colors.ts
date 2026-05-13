@@ -1,4 +1,4 @@
-export const enum Colors {
+export enum Colors {
   PRIMARY = "#2E5A88",
 
   SECONDARY = "#2D85B7",

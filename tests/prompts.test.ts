@@ -150,8 +150,7 @@ describe("detectPackageManager", () => {
 // ---------- gatherAnswers ----------
 
 describe("gatherAnswers", () => {
-  it("env-all-set → no prompts called; fonts forced empty (Deviation #9)", async () => {
-    // EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT silently ignored — fonts disabled.
+  it("env-all-set → no prompts called; fonts read from env vars", async () => {
     process.env.EXPO_PRIMARY_FONT = "Inter";
     process.env.EXPO_SECONDARY_FONT = "Roboto";
     process.env.EXPO_INCLUDE_BOTTOM_SHEET = "1";
@@ -159,8 +158,8 @@ describe("gatherAnswers", () => {
     process.env.EXPO_PACKAGE_MANAGER = "yarn";
     const ans = await gatherAnswers();
     expect(ans).toEqual({
-      primaryFont: "",
-      secondaryFont: "",
+      primaryFont: "Inter",
+      secondaryFont: "Roboto",
       bottomSheet: true,
       imagePicker: false,
       packageManager: "yarn",
@@ -168,19 +167,42 @@ describe("gatherAnswers", () => {
     expect(promptsMock).not.toHaveBeenCalled();
   });
 
-  it("font env vars are no-ops (always empty)", async () => {
-    process.env.EXPO_PRIMARY_FONT = "Inter";
-    process.env.EXPO_SECONDARY_FONT = "Roboto";
-    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
-    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
-    process.env.EXPO_PACKAGE_MANAGER = "npm";
-    const ans = await gatherAnswers();
-    expect(ans.primaryFont).toBe("");
-    expect(ans.secondaryFont).toBe("");
-  });
-
   it("missing bottom-sheet/image-picker + non-TTY → throws", async () => {
     process.env.EXPO_PACKAGE_MANAGER = "npm"; // Skip PM probe path.
     await expect(gatherAnswers()).rejects.toThrow(/not a TTY/);
+  });
+});
+
+describe("gatherAnswers font prompts", () => {
+  const origEnv = { ...process.env };
+  afterEach(() => {
+    process.env = { ...origEnv };
+    vi.resetModules();
+  });
+
+  it("reads EXPO_PRIMARY_FONT + EXPO_SECONDARY_FONT in non-TTY mode", async () => {
+    process.env.EXPO_PRIMARY_FONT = "Inter";
+    process.env.EXPO_SECONDARY_FONT = "Sansita";
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_PACKAGE_MANAGER = "npm";
+    vi.resetModules();
+    const { gatherAnswers } = await import("../src/prompts.js");
+    const answers = await gatherAnswers();
+    expect(answers.primaryFont).toBe("Inter");
+    expect(answers.secondaryFont).toBe("Sansita");
+  });
+
+  it("empty EXPO_PRIMARY_FONT + non-TTY → empty primary, skip secondary prompt", async () => {
+    process.env.EXPO_PRIMARY_FONT = "";
+    delete process.env.EXPO_SECONDARY_FONT;
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_PACKAGE_MANAGER = "npm";
+    vi.resetModules();
+    const { gatherAnswers } = await import("../src/prompts.js");
+    const answers = await gatherAnswers();
+    expect(answers.primaryFont).toBe("");
+    expect(answers.secondaryFont).toBe("");
   });
 });

@@ -78,23 +78,48 @@ export async function detectPackageManager(): Promise<PackageManager> {
 
 /**
  * Gather all answers — env vars take precedence; missing values prompted from TTY.
- * Non-TTY + missing answer → throw.
- *
- * NOTE: Fonts are intentionally hard-coded empty (Deviation #9). The generator
- * empty-path produces `Fonts = {} as const` + drops `useFonts` sentinels →
- * generated app has no font wiring. EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT
- * env vars are silently ignored (still shape-validated by validateEnvVars).
+ * Non-TTY + missing bottom-sheet/image-picker → throw. Fonts: env-var first,
+ * TTY fallback, else empty (no error — empty primary skips fonts gracefully).
  */
 export async function gatherAnswers(): Promise<Answers> {
-  // Fonts disabled — see Deviation #9.
-  const primaryFont = "";
-  const secondaryFont = "";
+  const tty = Boolean(process.stdin.isTTY);
 
-  // Only bottom-sheet + image-picker remain prompt-driven.
+  // Fonts — env-var first, TTY prompt fallback, else empty (skip).
+  let primaryFont: string;
+  const envPrimary = process.env.EXPO_PRIMARY_FONT;
+  if (envPrimary !== undefined) {
+    primaryFont = envPrimary.trim();
+  } else if (tty) {
+    const ans = await prompts({
+      type: "text",
+      name: "primaryFont",
+      message: "Primary font family (e.g. Inter; empty = skip fonts)",
+      initial: "",
+    });
+    primaryFont = String(ans.primaryFont ?? "").trim();
+  } else {
+    primaryFont = "";
+  }
+
+  let secondaryFont = "";
+  if (primaryFont) {
+    const envSecondary = process.env.EXPO_SECONDARY_FONT;
+    if (envSecondary !== undefined) {
+      secondaryFont = envSecondary.trim();
+    } else if (tty) {
+      const ans = await prompts({
+        type: "text",
+        name: "secondaryFont",
+        message: "Secondary font family (e.g. Sansita; empty = primary only)",
+        initial: "",
+      });
+      secondaryFont = String(ans.secondaryFont ?? "").trim();
+    }
+  }
+
+  // Bottom-sheet + image-picker — env-var first, TTY fallback.
   const envBottomSheet = readBoolEnv("EXPO_INCLUDE_BOTTOM_SHEET");
   const envImagePicker = readBoolEnv("EXPO_INCLUDE_IMAGE_PICKER");
-
-  const tty = Boolean(process.stdin.isTTY);
 
   const need = envBottomSheet === undefined || envImagePicker === undefined;
 

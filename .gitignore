@@ -6,3 +6,4 @@ dist/
 .env.local
 smoke-test/
 coverage/
+test-app/
