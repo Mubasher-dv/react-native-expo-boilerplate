@@ -1,6 +1,6 @@
 # **APP_NAME**
 
-Expo SDK 54 app scaffolded by [`codingpixel-expo-app`](https://github.com/Mubasher-dv/codingpixel-expo-app).
+Expo SDK 54 app scaffolded by [`react-native-expo-boilerplate`](https://github.com/Mubasher-dv/react-native-expo-boilerplate).
 
 ## Run
 
@@ -65,10 +65,10 @@ Path aliases (configured in `tsconfig.json` + `babel.config.js`):
 Add anything you skipped during scaffold — run from this directory:
 
 ```bash
-npx codingpixel-expo-app add bottom-sheet     # @gorhom/bottom-sheet + 5 components
-npx codingpixel-expo-app add image-picker     # expo-image-picker + PermissionService + constants
-npx codingpixel-expo-app add app-icon         # interactive: source path → updates app.json + copies asset
-npx codingpixel-expo-app add splash           # interactive: color + image → expo-splash-screen plugin + layout wiring
+npx react-native-expo-boilerplate add bottom-sheet     # @gorhom/bottom-sheet + 5 components
+npx react-native-expo-boilerplate add image-picker     # expo-image-picker + PermissionService + constants
+npx react-native-expo-boilerplate add app-icon         # interactive: source path → updates app.json + copies asset
+npx react-native-expo-boilerplate add splash           # interactive: color + image → expo-splash-screen plugin + layout wiring
 ```
 
 Rebuild after each recipe:
@@ -82,16 +82,16 @@ Two layout shapes, dispatched by argument arity:
 
 ```bash
 # Hierarchical role → feature → screen (3 levels)
-codingpixel-expo-app add role <role>                       # prompts feature + screen
-codingpixel-expo-app add feature <role> <name>             # prompts screen + initial?
-codingpixel-expo-app add screen <role> <feature> <name>    # prompts initial?
+react-native-expo-boilerplate add role <role>                       # prompts feature + screen
+react-native-expo-boilerplate add feature <role> <name>             # prompts screen + initial?
+react-native-expo-boilerplate add screen <role> <feature> <name>    # prompts initial?
 
 # Standalone feature → screen (2 levels, flat; for auth-style namespaces)
-codingpixel-expo-app add feature <name>                    # prompts first screen
-codingpixel-expo-app add screen <feature> <name>           # prompts initial?
+react-native-expo-boilerplate add feature <name>                    # prompts first screen
+react-native-expo-boilerplate add screen <feature> <name>           # prompts initial?
 
 # Bottom tabs inside a hierarchical role
-codingpixel-expo-app add bottom-tab <role>                 # prompts tab count (2–5) + names
+react-native-expo-boilerplate add bottom-tab <role>                 # prompts tab count (2–5) + names
 ```
 
 `add role auth` is refused — use `add feature auth` instead (auth is a standalone feature).
