@@ -26,7 +26,7 @@ export async function resolveTargetDir(arg?: string): Promise<ResolvedTarget> {
   if (arg === undefined || arg === "") {
     if (!process.stdin.isTTY) {
       throw new Error(
-        'No app name provided and stdin is not a TTY. Pass a directory: `codingpixel-expo my-app`.',
+        'No app name provided and stdin is not a TTY. Pass a directory: `react-native-expo-boilerplate my-app`.',
       );
     }
     const ans = await prompts({

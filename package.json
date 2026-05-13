@@ -1,10 +1,10 @@
 {
-  "name": "codingpixel-expo-app",
+  "name": "react-native-expo-boilerplate",
   "version": "0.3.4",
   "description": "Opinionated Expo app scaffolder mirroring MyRoster conventions.",
   "type": "module",
   "bin": {
-    "codingpixel-expo": "bin/cli.js"
+    "react-native-expo-boilerplate": "bin/cli.js"
   },
   "files": [
     "bin/",
@@ -31,11 +31,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Mubasher-dv/codingpixel-expo-app.git"
+    "url": "git+https://github.com/Mubasher-dv/react-native-expo-boilerplate.git"
   },
-  "homepage": "https://github.com/Mubasher-dv/codingpixel-expo-app#readme",
+  "homepage": "https://github.com/Mubasher-dv/react-native-expo-boilerplate#readme",
   "bugs": {
-    "url": "https://github.com/Mubasher-dv/codingpixel-expo-app/issues"
+    "url": "https://github.com/Mubasher-dv/react-native-expo-boilerplate/issues"
   },
   "author": "",
   "license": "MIT",

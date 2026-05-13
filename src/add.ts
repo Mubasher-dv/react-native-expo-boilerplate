@@ -12,10 +12,10 @@
 // (`auth`, `home`, …).
 //
 // Surfaces (CLI dispatch in src/index.ts):
-//   codingpixel-expo-app add bottom-sheet
-//   codingpixel-expo-app add image-picker
-//   codingpixel-expo-app add app-icon
-//   codingpixel-expo-app add splash
+//   react-native-expo-boilerplate add bottom-sheet
+//   react-native-expo-boilerplate add image-picker
+//   react-native-expo-boilerplate add app-icon
+//   react-native-expo-boilerplate add splash
 //
 // Cwd-based: each call treats `process.cwd()` as the target project. Refuses
 // to run if `app.json` is missing (best-effort guard against running outside
@@ -1220,7 +1220,7 @@ type Recipe = (typeof KNOWN_RECIPES)[number];
 export async function runAdd(recipe: string | undefined): Promise<void> {
   if (!recipe) {
     throw new Error(
-      `Missing recipe. Usage: codingpixel-expo-app add <${KNOWN_RECIPES.join("|")}>`,
+      `Missing recipe. Usage: react-native-expo-boilerplate add <${KNOWN_RECIPES.join("|")}>`,
     );
   }
   if (!(KNOWN_RECIPES as readonly string[]).includes(recipe)) {

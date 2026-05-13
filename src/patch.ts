@@ -35,7 +35,7 @@ export function slugify(name: string): string {
  *   - Each segment must START with a letter (no leading digits).
  *   - At least two segments separated by dots.
  *
- * `my-test-app` → `mytestapp` → final ID `com.codingpixel.mytestapp`.
+ * `my-test-app` → `mytestapp` → final ID `com.mytestapp`.
  * `1pp` → `app1pp` (leading-digit guard).
  */
 export function bundleIdSegment(name: string): string {
