@@ -1,11 +1,11 @@
-# `codingpixel-expo-app`
+# `react-native-expo-boilerplate`
 
 Opinionated Expo SDK 54+ app scaffolder. Mirrors the [MyRoster](https://github.com/) project's component / redux / theme conventions; layers them on top of `create-expo-app`'s `blank-typescript` template; runs all native-dep installs through `expo install` so versions match the target SDK; ships a single lockfile (yarn OR npm — never both).
 
 ## Quickstart
 
 ```bash
-npx codingpixel-expo-app my-app
+npx react-native-expo-boilerplate my-app
 cd my-app
 yarn ios          # or: yarn android  (npm run ios / npm run android also work)
 ```
@@ -14,7 +14,7 @@ yarn ios          # or: yarn android  (npm run ios / npm run android also work)
 
 For subsequent runs after the dev-client is installed, use `yarn start` (= `expo start --dev-client`) for faster iteration.
 
-The bin name is `codingpixel-expo` (used after global install). Invoke through `npx codingpixel-expo-app` (the package name) for one-shot runs.
+The bin name is `react-native-expo-boilerplate` (used after global install). Invoke through `npx react-native-expo-boilerplate` (the package name) for one-shot runs.
 
 ## Post-scaffold `add` commands
 
@@ -32,7 +32,7 @@ Skipped something at scaffold time? Retrofit it later without re-running the ful
 2. Run:
 
    ```bash
-   npx codingpixel-expo-app add <recipe>
+   npx react-native-expo-boilerplate add <recipe>
    ```
 
    `<recipe>` is one of `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
@@ -44,7 +44,7 @@ Skipped something at scaffold time? Retrofit it later without re-running the ful
 **`bottom-sheet`** — installs `@gorhom/bottom-sheet` and drops 5 components into `src/ui/appComponents/`: `customBottomSheetModal`, `appBottomSheetView`, `appBottomSheetBackdrop`, `appBottomSheetScrollView`, `BottomSheetKeyboardAwareScrollView`.
 
 ```bash
-npx codingpixel-expo-app add bottom-sheet
+npx react-native-expo-boilerplate add bottom-sheet
 ```
 
 Rebuild after: `yarn ios` / `yarn android` (or `npm run ios` / `npm run android`) — links the new native module into the dev-client.
@@ -52,7 +52,7 @@ Rebuild after: `yarn ios` / `yarn android` (or `npm run ios` / `npm run android`
 **`image-picker`** — installs `expo-image-picker`, drops `PermissionService.ts` into `src/core/services/`, splices `MEDIA_TYPES` + `IMAGE_PICKER_OPTIONS` + `CAMERA_OPTIONS` into `src/core/utils/constants.ts`, and adds the `expo-image-picker` plugin entry to `app.json` with default photos/camera permission strings.
 
 ```bash
-npx codingpixel-expo-app add image-picker
+npx react-native-expo-boilerplate add image-picker
 ```
 
 Rebuild after: `yarn ios` / `yarn android`.
@@ -62,7 +62,7 @@ Rebuild after: `yarn ios` / `yarn android`.
 **`app-icon`** — interactively prompts **only** for a source image path. Accepted format: **`.png` only** (case-insensitive). JPG / JPEG throw before any copy — per Expo SDK 54 docs, Android adaptive icon foreground requires PNG, and JPG/JPEG silently fail to render on Android. Recommended source: **1024 × 1024 square PNG**; sources below `432 × 432` (Android adaptive minimum at xxxhdpi) or below `1024 × 1024` (App Store / Play Store recommendation) still copy but log warnings.
 
 ```bash
-npx codingpixel-expo-app add app-icon
+npx react-native-expo-boilerplate add app-icon
 ```
 
 The recipe:
@@ -101,7 +101,7 @@ iOS Simulator has the same caching behavior — delete the app from the simulato
 4. Splices `SplashScreen.preventAutoHideAsync()` (module scope) + `useEffect(() => SplashScreen.hideAsync(), [])` (inside `RootLayout`) into `src/app/_layout.tsx`. Without this, Expo auto-hides the splash the moment the JS bundle loads (before the layout mounts), and your configured splash never actually renders. Idempotent — skips on re-run, and merges `useEffect` into an existing `from "react"` import rather than adding a duplicate line.
 
 ```bash
-npx codingpixel-expo-app add splash
+npx react-native-expo-boilerplate add splash
 ```
 
 Adjust `imageWidth` / `resizeMode` in `app.json` `plugins["expo-splash-screen"]` afterwards if the centered image renders too small or too large.
@@ -141,7 +141,7 @@ Commands dispatch on argument arity — no flags.
 Creates an Expo Router group, the feature root, and one starter screen.
 
 ```bash
-codingpixel-expo-app add role customer
+react-native-expo-boilerplate add role customer
 # prompts: First feature name? dashboard
 # prompts: First screen name?  home
 ```
@@ -172,7 +172,7 @@ A final prompt asks **"Make this role the app's initial route?"** — answering 
 Creates a standalone flat feature with its own route group and a starter screen.
 
 ```bash
-codingpixel-expo-app add feature auth
+react-native-expo-boilerplate add feature auth
 # prompts: First screen name? login
 ```
 
@@ -198,7 +198,7 @@ Also registers `<Stack.Screen name="(auth)" />` in `src/app/routes.tsx`.
 Adds a sibling feature under an existing hierarchical role.
 
 ```bash
-codingpixel-expo-app add feature customer profile
+react-native-expo-boilerplate add feature customer profile
 # prompts: Screen name?            edit
 # prompts: Make initial screen?    no
 ```
@@ -212,7 +212,7 @@ If you answer "yes" to the initial-screen prompt, the redirect in `src/app/(<rol
 Adds a sibling screen to an existing standalone feature.
 
 ```bash
-codingpixel-expo-app add screen auth signUp
+react-native-expo-boilerplate add screen auth signUp
 # prompts: Make initial screen? no
 ```
 
@@ -223,7 +223,7 @@ Refuses if the feature is not a standalone feature, the screen already exists, o
 Adds a sibling screen to a nested feature under a hierarchical role.
 
 ```bash
-codingpixel-expo-app add screen customer dashboard teamDetails
+react-native-expo-boilerplate add screen customer dashboard teamDetails
 # prompts: Make initial screen? no
 ```
 
@@ -234,7 +234,7 @@ Refuses if the role or feature does not exist, the screen already exists, or the
 Scaffolds an Expo Router `(tabs)/` group inside an existing hierarchical role.
 
 ```bash
-codingpixel-expo-app add bottom-tab customer
+react-native-expo-boilerplate add bottom-tab customer
 # prompts: How many bottom tabs? (2–5) 3
 # prompts: Tab #1 name? home
 # prompts: Tab #2 name? bookings
@@ -331,9 +331,9 @@ Required when stdin is not a TTY (e.g. slash-command flows).
 
 ## Bin name
 
-- npm package: `codingpixel-expo-app` (unscoped, public).
-- Bin: `codingpixel-expo`.
-- Run as `npx codingpixel-expo-app <dir>` (the package name) — `npx codingpixel-expo` only resolves after a `yarn global add` / `npm i -g` of this package.
+- npm package: `react-native-expo-boilerplate` (unscoped, public).
+- Bin: `react-native-expo-boilerplate`.
+- Run as `npx react-native-expo-boilerplate <dir>` (the package name) — `npx react-native-expo-boilerplate` only resolves after a `yarn global add` / `npm i -g` of this package.
 
 ## Recovery from mid-run failures
 
