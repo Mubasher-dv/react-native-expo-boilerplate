@@ -1,6 +1,6 @@
 # `react-native-expo-boilerplate`
 
-Opinionated Expo SDK 54+ app scaffolder. Mirrors the [MyRoster](https://github.com/) project's component / redux / theme conventions; layers them on top of `create-expo-app`'s `blank-typescript` template; runs all native-dep installs through `expo install` so versions match the target SDK; ships a single lockfile (yarn OR npm — never both).
+Opinionated Expo SDK 54+ app scaffolder. Provides a structured component / redux / theme setup on top of `create-expo-app`'s `blank-typescript` template; runs all native-dep installs through `expo install` so versions match the target SDK; ships a single lockfile (yarn OR npm — never both).
 
 ## Quickstart
 
@@ -294,7 +294,7 @@ Fonts are intentionally disabled in v0.1.x — generated `src/ui/theme/fonts.ts`
 
 ## `@/*` alias
 
-The template overrides `expo/tsconfig.base`'s default by setting `@/*` → `src/*`. All MyRoster-style aliases (`@theme/*`, `@utils/*`, `@redux/*`, `@core/*`, `@services/*`, `@hooks/*`, `@appComponents/*`, `@components/*`, `@icons/*`, `@features/*`, `@assets`) resolve to their concrete dirs in `src/`. See `tsconfig.json` `compilerOptions.paths`.
+The template overrides `expo/tsconfig.base`'s default by setting `@/*` → `src/*`. All aliases (`@theme/*`, `@utils/*`, `@redux/*`, `@core/*`, `@services/*`, `@hooks/*`, `@appComponents/*`, `@components/*`, `@icons/*`, `@features/*`, `@assets`) resolve to their concrete dirs in `src/`. See `tsconfig.json` `compilerOptions.paths`.
 
 If your generated app's `tsconfig.json` already has a `@/*` mapping, the CLI preserves it + warns.
 
@@ -353,7 +353,7 @@ yarn test
 yarn audit:templates    # also runs as prepublishOnly
 ```
 
-`prepublishOnly` chains `npm run build && npm run test && npm run audit:templates` — `audit:templates` greps mirrored files for unmapped MyRoster prefixes + Fonts-as-type misuse, blocking publish on stale audits. See `docs/MIRROR_NOTES.md` for the deviation log.
+`prepublishOnly` chains `npm run build && npm run test && npm run audit:templates` — `audit:templates` greps template files for unmapped import prefixes + Fonts-as-type misuse, blocking publish on stale audits. See `docs/MIRROR_NOTES.md` for the deviation log.
 
 Publish:
 
