@@ -127,7 +127,7 @@ Plan §7 missing imports found in shipped scope. Added:
 - **Force-upgrades stale defaults** so re-running the CLI on existing scaffolds with the old script values converges to the new ones.
 - README + success-message updated to reflect single-command flow.
 
-### Deviation #13 — Bundle ID format `com.<safeName>` (no `codingpixel.` prefix)
+### Deviation #13 — Bundle ID format `com.<safeName>` (no org prefix)
 - **Reason:** User feedback — don't inject app-author namespace into generated app's bundle ID. Apps that own their own scope (e.g. `com.example.myapp`) edit `app.json` after.
 - **Resolution:** `bundleIdFor(name)` returns `com.<safeName>`. Examples: `My Cool App` → `com.mycoolapp`. `cpx-e2e` → `com.cpxe2e`.
 
