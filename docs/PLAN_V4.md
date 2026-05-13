@@ -1,4 +1,4 @@
-# `@codingpixel/create-expo-app` — Implementation Plan **v4**
+# `react-native-expo-boilerplate` — Implementation Plan **v4**
 
 **Date:** 2026-05-11
 **Spec:** [SPEC.md](./SPEC.md)
@@ -10,7 +10,7 @@ Fixes 8 issues surfaced in v3 review + stale text. Decisions locked (carrying v3
 
 | Topic | Decision |
 |---|---|
-| Bin name | `codingpixel-expo` |
+| Bin name | `react-native-expo-boilerplate` |
 | Fonts type | Object literal `as const` + `FontKey` |
 | Assets path | Root `assets/` |
 | Native deps | All via `npx expo install` |
@@ -35,19 +35,19 @@ Phases mirror v3. `[CHANGED FROM V3]` and `[NEW v4]` markers preserved.
 
 ### Tasks
 
-1. `mkdir codingpixel-create-expo-app && cd codingpixel-create-expo-app`
+1. `mkdir react-native-expo-boilerplate && cd react-native-expo-boilerplate`
 2. `npm init -y`. Edit `package.json`:
-   - `"name": "@codingpixel/create-expo-app"`
+   - `"name": "react-native-expo-boilerplate"`
    - `"version": "0.1.0"`
    - `"type": "module"`
-   - `"bin": { "codingpixel-expo": "./bin/cli.js" }`
+   - `"bin": { "react-native-expo-boilerplate": "./bin/cli.js" }`
    - `"files": ["bin/", "dist/", "templates/", "README.md", "LICENSE"]`
    - `"engines": { "node": ">=18" }`
 3. devDeps: `typescript`, `tsx`, `@types/node`, `vitest`, `prettier`, `eslint`.
 4. Runtime deps: `prompts`, `kleur`, `execa`, `fs-extra`, `@babel/parser`, `@babel/traverse`, `@babel/generator`, `@babel/types`.
 5. `tsconfig.json`: `target ES2022`, `module NodeNext`, `outDir dist`, `strict true`.
 6. `bin/cli.js` with error guard (same as v3). `chmod +x bin/cli.js`.
-7. `src/index.ts` prints "hello from @codingpixel/create-expo-app".
+7. `src/index.ts` prints "hello from react-native-expo-boilerplate".
 8. Scripts: `build`, `dev`, `test`.
 9. `git init`, initial commit.
 10. **[CHANGED]** Pre-exec verification (record in `docs/SDK_NOTES.md`):
@@ -352,7 +352,7 @@ Same as v3 + PM passthrough.
      EXPO_PRIMARY_FONT="" EXPO_SECONDARY_FONT="" \
        EXPO_INCLUDE_BOTTOM_SHEET="0" EXPO_INCLUDE_IMAGE_PICKER="0" \
        EXPO_PACKAGE_MANAGER="yarn" \
-       npx @codingpixel/create-expo-app <dir>
+       npx react-native-expo-boilerplate <dir>
      ```
 2. README install section.
 3. Manual test.
@@ -403,7 +403,7 @@ Carried as v3. New:
 - Single lockfile per generated project.
 - Zero `@@TOKEN@@` placeholders in generated output.
 - Zero MyRoster-specific prefixes (`@/theme/`, `@/utils/`, etc.) remain in mirrored sources. (Bare `@/<anything>` allowed — catchall alias.)
-- Published to npm under `@codingpixel/create-expo-app`.
+- Published to npm under `react-native-expo-boilerplate`.
 - Slash command + README sections shipped.
 
 ---

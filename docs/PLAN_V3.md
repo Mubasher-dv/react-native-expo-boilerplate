@@ -1,4 +1,4 @@
-# `@codingpixel/create-expo-app` — Implementation Plan **v3**
+# `react-native-expo-boilerplate` — Implementation Plan **v3**
 
 **Date:** 2026-05-11
 **Spec:** [SPEC.md](./SPEC.md)
@@ -9,7 +9,7 @@ Fixes blockers + strong concerns surfaced in v2 review. Decisions locked:
 
 | Topic | Decision |
 |---|---|
-| Bin name | `codingpixel-expo` (hygiene — avoids collision when both globally installed; `npx @codingpixel/create-expo-app` resolves by package name regardless) |
+| Bin name | `react-native-expo-boilerplate` (hygiene — avoids collision when both globally installed; `npx react-native-expo-boilerplate` resolves by package name regardless) |
 | Fonts type | Object literal `as const` + derived type (drop `const enum` — not Babel-safe under `babel-preset-expo`) |
 | Assets path | Root `assets/` (matches SPEC §6 + Expo convention; PLAN_V2's `src/assets/` was wrong) |
 | Native deps | All native deps installed via `npx expo install <pkg> ...` so Expo resolves versions for target SDK — eliminates manual version pinning per SDK |
@@ -27,12 +27,12 @@ Phases mirror v2 numbering. `[CHANGED FROM V2]` and `[NEW]` markers preserved.
 
 ### Tasks
 
-1. `mkdir codingpixel-create-expo-app && cd codingpixel-create-expo-app`
+1. `mkdir react-native-expo-boilerplate && cd react-native-expo-boilerplate`
 2. `npm init -y`. Edit `package.json`:
-   - `"name": "@codingpixel/create-expo-app"`
+   - `"name": "react-native-expo-boilerplate"`
    - `"version": "0.1.0"`
    - `"type": "module"`
-   - **[CHANGED]** `"bin": { "codingpixel-expo": "./bin/cli.js" }` — renamed to avoid Expo bin collision. `npx @codingpixel/create-expo-app` still works (single bin auto-invoked).
+   - **[CHANGED]** `"bin": { "react-native-expo-boilerplate": "./bin/cli.js" }` — renamed to avoid Expo bin collision. `npx react-native-expo-boilerplate` still works (single bin auto-invoked).
    - `"files": ["bin/", "dist/", "templates/", "README.md", "LICENSE"]`
    - `"engines": { "node": ">=18" }`
 3. Add devDeps: `typescript`, `tsx`, `@types/node`, `vitest`, `prettier`, `eslint`.
@@ -51,7 +51,7 @@ Phases mirror v2 numbering. `[CHANGED FROM V2]` and `[NEW]` markers preserved.
    });
    ```
    `chmod +x bin/cli.js`.
-7. `src/index.ts` prints "hello from @codingpixel/create-expo-app".
+7. `src/index.ts` prints "hello from react-native-expo-boilerplate".
 8. Scripts: `build` (`tsc`), `dev` (`tsx src/index.ts`), `test` (`vitest`).
 9. `git init`, initial commit.
 10. **[NEW]** Pre-exec verification (record findings in `docs/SDK_NOTES.md`):
@@ -361,13 +361,13 @@ Same as v2 except marker file already dropped.
 ### Tasks
 
 1. Author `templates/claude-command/init-app.md`:
-   - Frontmatter: `description: "Bootstrap a new Expo app via @codingpixel/create-expo-app"`.
+   - Frontmatter: `description: "Bootstrap a new Expo app via react-native-expo-boilerplate"`.
    - Body uses `AskUserQuestion` for: app name, target dir, 4 prompt answers.
    - Builds env var string. **[CLARIFIED]** Skip-font case = pass empty string explicitly:
      ```bash
      EXPO_PRIMARY_FONT="" EXPO_SECONDARY_FONT="" \
        EXPO_INCLUDE_BOTTOM_SHEET="0" EXPO_INCLUDE_IMAGE_PICKER="0" \
-       npx @codingpixel/create-expo-app <dir>
+       npx react-native-expo-boilerplate <dir>
      ```
    - Document: empty string = "answered: skipped"; unset = "ask".
 2. README install section: copy file into `.claude/commands/`.
@@ -387,13 +387,13 @@ Same as v2 except marker file already dropped.
    - **"`@/*` alias note"** — overrides `expo/tsconfig.base` default; resolves to `src/*`.
    - **"First-time dev-client build"** — `npx expo prebuild` → `yarn ios` / `yarn android`; iOS needs Xcode + CocoaPods, Android needs SDK.
    - **"Expo SDK compatibility"** — state which SDK this CLI release targets (set per release). Native dep versions inherited automatically from `expo install`.
-   - **"Bin name"** — note `bin` is `codingpixel-expo` to avoid clash with upstream `create-expo-app`. Users invoke via `npx @codingpixel/create-expo-app` (package name) or `codingpixel-expo` (after global install).
+   - **"Bin name"** — note `bin` is `react-native-expo-boilerplate` to avoid clash with upstream `create-expo-app`. Users invoke via `npx react-native-expo-boilerplate` (package name) or `react-native-expo-boilerplate` (after global install).
 2. Add `LICENSE` (MIT).
 3. `prepublishOnly`: `yarn build && yarn test`.
 4. Scoped publish: `npm publish --access public`.
 5. Tag: `git tag v0.1.0 && git push --tags`.
 
-**Exit criterion:** `npx @codingpixel/create-expo-app new-project` works from anywhere.
+**Exit criterion:** `npx react-native-expo-boilerplate new-project` works from anywhere.
 
 ---
 
@@ -403,7 +403,7 @@ Same as v2 except marker file already dropped.
 |---|----------|--------|
 | 1 | `assets/` path mismatch (SPEC root vs PLAN_V2 `src/assets/`) | Phase 4 puts `assets/` at project root, matching SPEC §6 + `useFonts` require paths in §5.2. |
 | 2 | `const enum Fonts` — not Babel-safe, breaks `isolatedModules` | Phase 6 uses `export const Fonts = {...} as const` + `type FontKey`. Same compile-time safety, works at runtime. |
-| 3 | Bin name `create-expo-app` collides with upstream Expo bin | Phase 0 renames bin to `codingpixel-expo`. Package name unchanged. |
+| 3 | Bin name `create-expo-app` collides with upstream Expo bin | Phase 0 renames bin to `react-native-expo-boilerplate`. Package name unchanged. |
 | 4 | Dead `index.ts` deletion in `cleanupBlankTemplate` | Removed (blank-typescript template doesn't ship one). |
 | 5 | Manual version pinning for native deps per SDK | Phase 7 uses `npx expo install` — Expo picks SDK-compatible versions. |
 | 6 | `react-native-screens` missing (expo-router peer) | Added to always-install list (via `expo install`). |
@@ -442,7 +442,7 @@ Same as v2 except marker file already dropped.
 - Unit + smoke tests green in CI (Node 18 + 20).
 - Template `tsc --noEmit` step green.
 - Generated project boots via `yarn ios` / `yarn android` after `npx expo prebuild`.
-- Published to npm under `@codingpixel/create-expo-app`.
+- Published to npm under `react-native-expo-boilerplate`.
 - Slash command + README sections shipped.
 
 ---
@@ -456,4 +456,4 @@ Not part of plan execution; doc cleanup:
 - §8 — note bottom-sheet + image-picker each contribute an `app.json` plugin entry.
 - §10 — drop `SafeAreaInsetsProvider` line.
 - §13 — `EXPO_INCLUDE_*` truthiness = strict `"1"`/`"0"`; document empty-string = skip for string vars.
-- §14 — update bin name to `codingpixel-expo`.
+- §14 — update bin name to `react-native-expo-boilerplate`.

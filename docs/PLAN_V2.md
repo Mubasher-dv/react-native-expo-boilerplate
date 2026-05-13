@@ -1,4 +1,4 @@
-# `@codingpixel/create-expo-app` — Implementation Plan **v2**
+# `react-native-expo-boilerplate` — Implementation Plan **v2**
 
 **Date:** 2026-05-11
 **Spec:** [SPEC.md](./SPEC.md)
@@ -17,9 +17,9 @@ Same as v1. No changes.
 
 ### Tasks
 
-1. `mkdir codingpixel-create-expo-app && cd codingpixel-create-expo-app`
+1. `mkdir react-native-expo-boilerplate && cd react-native-expo-boilerplate`
 2. `npm init -y`. Edit `package.json`:
-   - `"name": "@codingpixel/create-expo-app"`
+   - `"name": "react-native-expo-boilerplate"`
    - `"version": "0.1.0"`
    - `"type": "module"`
    - `"bin": { "create-expo-app": "./bin/cli.js" }`
@@ -41,7 +41,7 @@ Same as v1. No changes.
    });
    ```
    `chmod +x bin/cli.js`.
-7. Create `src/index.ts` printing "hello from @codingpixel/create-expo-app".
+7. Create `src/index.ts` printing "hello from react-native-expo-boilerplate".
 8. Add `scripts.build` (`tsc`), `scripts.dev` (`tsx src/index.ts`), `scripts.test` (`vitest`).
 9. `git init`, initial commit.
 
@@ -307,8 +307,8 @@ All placeholder tokens live inside line comments on their own line so the templa
 ### Tasks
 
 1. Author `templates/claude-command/init-app.md`:
-   - Frontmatter: `description: "Bootstrap a new Expo app via @codingpixel/create-expo-app"`.
-   - Body instructs Claude to use `AskUserQuestion` for each prompt + app name + target dir, then runs `npx @codingpixel/create-expo-app` with the 4 `EXPO_*` env vars set (using `"1"`/`"0"` for booleans per Phase 2 truthiness rule).
+   - Frontmatter: `description: "Bootstrap a new Expo app via react-native-expo-boilerplate"`.
+   - Body instructs Claude to use `AskUserQuestion` for each prompt + app name + target dir, then runs `npx react-native-expo-boilerplate` with the 4 `EXPO_*` env vars set (using `"1"`/`"0"` for booleans per Phase 2 truthiness rule).
 2. Document in README how to install (copy file into `.claude/commands/`).
 3. Manual test in this repo's `.claude/commands/` folder.
 
@@ -329,7 +329,7 @@ All placeholder tokens live inside line comments on their own line so the templa
 4. Verify scoped publishing: `npm publish --access public`.
 5. Tag release: `git tag v0.1.0 && git push --tags`.
 
-**Exit criterion:** `npx @codingpixel/create-expo-app new-project` works from anywhere.
+**Exit criterion:** `npx react-native-expo-boilerplate new-project` works from anywhere.
 
 ---
 
@@ -374,7 +374,7 @@ All placeholder tokens live inside line comments on their own line so the templa
 - All 10 phases complete.
 - Unit + smoke tests green in CI.
 - Generated project boots via `yarn ios` / `yarn android` after `npx expo prebuild`.
-- Package published to npm under `@codingpixel/create-expo-app`.
+- Package published to npm under `react-native-expo-boilerplate`.
 - Slash command available + documented.
 - README covers prompt walkthrough, generated structure, Expo Go incompatibility, prebuild flow, future-work roadmap.
 

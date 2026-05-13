@@ -1,4 +1,4 @@
-# `@codingpixel/create-expo-app` — Implementation Plan **v5**
+# `react-native-expo-boilerplate` — Implementation Plan **v5**
 
 **Date:** 2026-05-11
 **Spec:** [SPEC.md](./SPEC.md)
@@ -113,7 +113,7 @@ Consolidates V4 + v4-r1 patches into single coherent document. No revision marke
 
 | Topic | Decision |
 |---|---|
-| Bin name | `codingpixel-expo` |
+| Bin name | `react-native-expo-boilerplate` |
 | Fonts type | Object literal `as const` + `FontKey` (NOT TS `enum` — Babel-unsafe) |
 | Assets path | Root `assets/` |
 | Native deps | All via `npx expo install` with explicit `{ cwd: target }` |
@@ -133,12 +133,12 @@ Consolidates V4 + v4-r1 patches into single coherent document. No revision marke
 
 ### Tasks
 
-1. `mkdir codingpixel-create-expo-app && cd codingpixel-create-expo-app`
+1. `mkdir react-native-expo-boilerplate && cd react-native-expo-boilerplate`
 2. `npm init -y`. Edit `package.json`:
-   - `"name": "@codingpixel/create-expo-app"`
+   - `"name": "react-native-expo-boilerplate"`
    - `"version": "0.1.0"`
    - `"type": "module"`
-   - `"bin": { "codingpixel-expo": "./bin/cli.js" }`
+   - `"bin": { "react-native-expo-boilerplate": "./bin/cli.js" }`
    - `"files": ["bin/", "dist/", "templates/", "README.md", "LICENSE"]`
    - `"engines": { "node": ">=18" }`
 3. devDeps: `typescript`, `tsx`, `@types/node`, `vitest`, `prettier`, `eslint`.
@@ -162,7 +162,7 @@ Consolidates V4 + v4-r1 patches into single coherent document. No revision marke
    });
    ```
    `chmod +x bin/cli.js`.
-7. `src/index.ts` prints "hello from @codingpixel/create-expo-app".
+7. `src/index.ts` prints "hello from react-native-expo-boilerplate".
 8. Scripts: `build`, `dev`, `test`.
 9. `git init`, initial commit.
 10. Pre-exec verification (record in `docs/SDK_NOTES.md`). **All probes run from CLI project root**; subshells (`( cd smoke-test && ... )`) isolate any `cd` so outer pwd never drifts. **All output lines are `KEY=VALUE`** so Phase 7/8 can `grep '^FOO=' docs/SDK_NOTES.md` programmatically. Run probes in the order listed — order matters (Probe -1 must install `expo` before Probe 4 reads its tsconfig). **Total: Probes -1 through 8 with sub-probe 0b** (11 probes; v5-r6 corrected the earlier "Numbered probes 0–8" claim).
@@ -483,7 +483,7 @@ Replaces each whole-line sentinel with generated block, OR removes the line enti
 
 0. **Create `docs/MIRROR_NOTES.md`** before mirror step. Skeleton:
    ```markdown
-   # MyRoster → @codingpixel/create-expo-app alias mirror
+   # MyRoster → react-native-expo-boilerplate alias mirror
 
    **Date:** YYYY-MM-DD
    **Source commit:** <MyRoster sha at inspection time>
@@ -919,7 +919,7 @@ Phases 3–8 mutate `<target>` in place. If any phase throws mid-execution, targ
      EXPO_PRIMARY_FONT="" EXPO_SECONDARY_FONT="" \
        EXPO_INCLUDE_BOTTOM_SHEET="0" EXPO_INCLUDE_IMAGE_PICKER="0" \
        EXPO_PACKAGE_MANAGER="yarn" \
-       npx @codingpixel/create-expo-app my-app    # substitute resolved app name here
+       npx react-native-expo-boilerplate my-app    # substitute resolved app name here
      ```
 2. README install section.
 3. Manual test.
@@ -938,7 +938,7 @@ Phases 3–8 mutate `<target>` in place. If any phase throws mid-execution, targ
    - **"`@/*` alias note"** — overrides `expo/tsconfig.base` default; resolves to `src/*`.
    - **"First-time dev-client build"** — `npx expo prebuild` → `yarn ios` / `yarn android`; iOS needs Xcode + CocoaPods; Android needs SDK.
    - **"Expo SDK compatibility"** — state which SDK this CLI release targets. Native dep versions inherited via `expo install`.
-   - **"Bin name"** — note `bin` is `codingpixel-expo`. Invoke via `npx @codingpixel/create-expo-app` (package name) or `codingpixel-expo` (global install).
+   - **"Bin name"** — note `bin` is `react-native-expo-boilerplate`. Invoke via `npx react-native-expo-boilerplate` (package name) or `react-native-expo-boilerplate` (global install).
 2. Add `LICENSE` (MIT).
 3. **`prepublishOnly` audit chain** — guards against new mirrored files bypassing one-time template authoring audits.
    - **Create `scripts/audit-templates.sh`** consolidating the three grep audits. **v5-r4: standardized on `if pipeline; then fail; fi` form across all three audits** (matches Phase 4/5 style; both forms are `set -e` safe but a single style is easier to audit). Fonts type-position pattern matches Phase 4 step 10 extension.
@@ -990,7 +990,7 @@ Phases 3–8 mutate `<target>` in place. If any phase throws mid-execution, targ
 4. Scoped publish: `npm publish --access public`.
 5. Tag release: `git tag v0.1.0 && git push --tags`.
 
-**Exit criterion:** `npx @codingpixel/create-expo-app new-project` works from anywhere.
+**Exit criterion:** `npx react-native-expo-boilerplate new-project` works from anywhere.
 
 ---
 
@@ -1026,7 +1026,7 @@ Phases 3–8 mutate `<target>` in place. If any phase throws mid-execution, targ
 - Single lockfile per generated project.
 - Zero `@@[A-Z_]+@@` sentinel residue in generated project sources (excluding `node_modules`) per Phase 6 step 5.
 - Zero MyRoster-specific prefixes (`@/theme/`, `@/utils/`, etc.) remain in mirrored sources. (Bare `@/<anything>` allowed — catchall alias.)
-- Published to npm under `@codingpixel/create-expo-app`.
+- Published to npm under `react-native-expo-boilerplate`.
 - Slash command + README sections shipped.
 
 ---
@@ -1035,7 +1035,7 @@ Phases 3–8 mutate `<target>` in place. If any phase throws mid-execution, targ
 
 SPEC.md aligned with V5 + v5-r4 + v5-r5 + v5-r6 decisions:
 
-- V4 baseline: fonts object literal, root `assets/` path, `EXPO_PACKAGE_MANAGER` env var, single-lockfile invariant, prebuild smoke flow, `@@TOKEN@@` sentinel naming, bin rename to `codingpixel-expo`, dropped `SafeAreaInsetsProvider`.
+- V4 baseline: fonts object literal, root `assets/` path, `EXPO_PACKAGE_MANAGER` env var, single-lockfile invariant, prebuild smoke flow, `@@TOKEN@@` sentinel naming, bin rename to `react-native-expo-boilerplate`, dropped `SafeAreaInsetsProvider`.
 - v5-r4 SPEC edits: §9 `@assets` alias target corrected from `src/assets` → `assets` (project root, matches §5.2 + §6); §13 lockfile invariant documents Branch A (`--yarn`/`--npm` flag path) + Branch B (pre-seed lockfile path).
 - v5-r6: no SPEC body changes required — all r6 fixes are internal to the plan (probe block hardening, regex tightening, dep pinning, ordering of env-var validation). SPEC §13 PM-mismatch behavior described loosely; PLAN_V5 Phase 8 step 1 spells out the loud-warning recovery hint added in r6.
 - v5-r5 PLAN edits are PLAN-only — no SPEC changes required.

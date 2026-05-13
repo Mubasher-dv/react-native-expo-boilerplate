@@ -1,4 +1,4 @@
-# MyRoster → @codingpixel/create-expo-app alias mirror
+# MyRoster → react-native-expo-boilerplate alias mirror
 
 **Date:** 2026-05-11
 **Source commit:** vendor/myroster-src/ (pasted by user, no git history available)
@@ -141,8 +141,8 @@ Plan §7 missing imports found in shipped scope. Added:
 
 ### Deviation #12 — `patchAppJson` sets `android.package` + `ios.bundleIdentifier`
 - **Reason:** `expo run:android` / `expo run:ios` errors with `Required property 'android.package' is not found in the project app.json` (or `ios.bundleIdentifier`). create-expo-app's blank-typescript template no longer ships defaults for these on SDK 54.
-- **Resolution:** `patchAppJson` derives a reverse-DNS bundle ID from the user-supplied app name via new `bundleIdFor(name)` helper. Format: `com.codingpixel.<safeName>` where `safeName` = slugified-name with dashes stripped + leading-digit guard. Preserves user-set values.
-- **Examples:** `My Cool App` → `com.codingpixel.mycoolapp`. `cpx-e2e` → `com.codingpixel.cpxe2e`. `1pp` → `com.codingpixel.app1pp`.
+- **Resolution:** `patchAppJson` derives a reverse-DNS bundle ID from the user-supplied app name via new `bundleIdFor(name)` helper. Format: `com.<safeName>` where `safeName` = slugified-name with dashes stripped + leading-digit guard. Preserves user-set values.
+- **Examples:** `My Cool App` → `com.mycoolapp`. `cpx-e2e` → `com.cpxe2e`. `1pp` → `com.app1pp`.
 - **Apps that want a different namespace:** edit `app.json` `expo.ios.bundleIdentifier` + `expo.android.package` after scaffold; the patcher only fills defaults when missing.
 
 ### Deviation #11 — Add `expo-linking` + `expo-constants` to install list

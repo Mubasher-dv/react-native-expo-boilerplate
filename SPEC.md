@@ -1,4 +1,4 @@
-# `@codingpixel/create-expo-app` — Design Spec
+# `react-native-expo-boilerplate` — Design Spec
 
 **Date:** 2026-05-11
 **Status:** Approved, awaiting implementation plan
@@ -35,9 +35,9 @@ The CLI's bootstrap step always invokes `npx create-expo-app@latest` under the h
 ## 3. CLI invocation
 
 ```bash
-npx @codingpixel/create-expo-app my-app   # mkdir ./my-app/ then populate
-npx @codingpixel/create-expo-app .         # populate current directory
-npx @codingpixel/create-expo-app           # prompts user for app name
+npx react-native-expo-boilerplate my-app   # mkdir ./my-app/ then populate
+npx react-native-expo-boilerplate .         # populate current directory
+npx react-native-expo-boilerplate           # prompts user for app name
 ```
 
 Mirrors the `create-expo-app` UX. No flags in v1 (everything is interactive).
@@ -262,7 +262,7 @@ Behavior when invoked inside Claude Code:
 1. Claude reads the command spec.
 2. Asks the same prompts (§5) via `AskUserQuestion` or natural dialogue.
 3. Resolves a target directory (default = a new sibling of cwd unless user says otherwise).
-4. Runs `npx @codingpixel/create-expo-app <args>` via `Bash`, piping answers through environment variables or non-interactive flags — see §13.
+4. Runs `npx react-native-expo-boilerplate <args>` via `Bash`, piping answers through environment variables or non-interactive flags — see §13.
 5. Reports success/failure.
 
 The slash command is documented in the README. It is optional; the CLI works standalone.
@@ -288,8 +288,8 @@ If all four prompt vars are set, no prompts are shown; CLI runs fully non-intera
 ## 14. Package layout
 
 ```
-codingpixel-create-expo-app/
-  package.json               ← name: "@codingpixel/create-expo-app", bin: { "codingpixel-expo": "./bin/cli.js" }  (bin renamed to avoid collision with upstream `create-expo-app` bin; `npx @codingpixel/create-expo-app` still resolves by package name)
+react-native-expo-boilerplate/
+  package.json               ← name: "react-native-expo-boilerplate", bin: { "react-native-expo-boilerplate": "./bin/cli.js" }  (bin renamed to avoid collision with upstream `create-expo-app` bin; `npx react-native-expo-boilerplate` still resolves by package name)
   README.md                  ← detailed usage, prompt walkthrough, structure overview, future-work section
   LICENSE                    ← MIT
   bin/
@@ -337,7 +337,7 @@ codingpixel-create-expo-app/
   - `fonts.ts` generator: empty primary, primary only, primary + secondary, spaces in family name.
   - `patch.ts`: package.json merge, tsconfig path injection, babel alias injection.
   - `overlay.ts`: conditional inclusion logic.
-- **Smoke E2E** (manual until v2): run `npx @codingpixel/create-expo-app test-app` in a temp dir with each combination of bottom-sheet × image-picker × font choices, then `cd test-app && npx expo prebuild && yarn ios` (or `npm run ios`) and confirm the dev-client build succeeds and Metro bundles without errors. **Expo Go is not compatible** — `yarn start` alone won't run this stack (native modules require dev-client).
+- **Smoke E2E** (manual until v2): run `npx react-native-expo-boilerplate test-app` in a temp dir with each combination of bottom-sheet × image-picker × font choices, then `cd test-app && npx expo prebuild && yarn ios` (or `npm run ios`) and confirm the dev-client build succeeds and Metro bundles without errors. **Expo Go is not compatible** — `yarn start` alone won't run this stack (native modules require dev-client).
 - Assert single lockfile: `[ -f yarn.lock ] || [ -f package-lock.json ]` AND not both.
 - Assert zero `@@[A-Z_]+@@` sentinel residue in generated project sources (excluding `node_modules`) per PLAN_V5 Phase 6 step 5.
 - Assert zero MyRoster-specific alias prefixes (`@/theme/`, `@/utils/`, `@/redux/`, `@/core/`, `@/services/`, `@/hooks/`, `@/appComponents/`, `@/components/`, `@/icons/`, `@/features/`, `@/assets`) survive in mirrored sources. **Bare `@/<anything-else>` IS allowed — `@/*` is a legitimate catchall alias resolving to `src/*` (see §9).**
@@ -353,7 +353,7 @@ Sub-command surface, deferred from v1:
 
 | Command | Effect |
 |---------|--------|
-| `npx @codingpixel/create-expo-app g feature <role>/<name>` | Scaffold MVVM feature: `features/<role>/<name>/types.ts` + first screen (`<screen>/index.tsx` + `components/` + `viewModel/_api.ts` + `viewModel/use<Screen>ViewModel.ts`). Register a new key in `tanstack-keys.ts`. |
+| `npx react-native-expo-boilerplate g feature <role>/<name>` | Scaffold MVVM feature: `features/<role>/<name>/types.ts` + first screen (`<screen>/index.tsx` + `components/` + `viewModel/_api.ts` + `viewModel/use<Screen>ViewModel.ts`). Register a new key in `tanstack-keys.ts`. |
 | `g screen <role>/<feature> <name>` | Add another `<name>/` screen to an existing feature. |
 | `g slice <name>` | Add `core/redux/slices/<name>Slice.ts`, auto-register in `reducers.ts`. |
 | `g group <name>` | Add `app/(<name>)/_layout.tsx` route group. |
@@ -364,4 +364,4 @@ NestJS-style aliases (`g` = `generate`).
 Other v2 candidates:
 - `--preset` flag for pre-baked answers (e.g. `--preset coach-app` mirrors MyRoster exactly).
 - Plugin system for community-shared templates.
-- Built-in upgrade flow (`npx @codingpixel/create-expo-app upgrade`) to bump deps in an existing scaffolded project.
+- Built-in upgrade flow (`npx react-native-expo-boilerplate upgrade`) to bump deps in an existing scaffolded project.
