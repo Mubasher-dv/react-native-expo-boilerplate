@@ -28,7 +28,7 @@ Manual file-by-file edits (Approach A). Chosen because:
 ## Files Changed
 
 ### Source (`src/`)
-- **`src/patch.ts`** — `bundleIdFor()` removes `codingpixel.` prefix. Result: `com.<safeName>` only.
+- **`src/patch.ts`** — `bundleIdFor()` already generates `com.<safeName>` (no org prefix). Only the JSDoc comment on line 38 is stale (`com.codingpixel.mytestapp` example) — fix that string.
 - **`src/add.ts`** — usage string update
 - **`src/bootstrap.ts`** — usage string update
 
