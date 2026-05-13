@@ -7,25 +7,25 @@
 
 ## Goal
 
-Extend `codingpixel-expo-app` with a **standalone feature** concept — a top-level feature that owns its own Expo Router group and contains screens directly (no intermediate feature subfolder). Designed for cases like `auth` where each "thing" (login, signUp, forgotPassword) is just a screen, and the 3-level role/feature/screen hierarchy is overkill.
+Extend `react-native-expo-boilerplate` with a **standalone feature** concept — a top-level feature that owns its own Expo Router group and contains screens directly (no intermediate feature subfolder). Designed for cases like `auth` where each "thing" (login, signUp, forgotPassword) is just a screen, and the 3-level role/feature/screen hierarchy is overkill.
 
 Existing hierarchical role/feature/screen flow stays unchanged for cases like `customer/dashboard/home`.
 
 ### Concrete target
 
 ```
-codingpixel-expo-app add feature auth                # standalone: creates (auth) + features/auth/ + first screen
-codingpixel-expo-app add screen auth login           # flat screen directly under auth
-codingpixel-expo-app add screen auth signUp          # ...
-codingpixel-expo-app add screen auth forgotPassword  # ...
+react-native-expo-boilerplate add feature auth                # standalone: creates (auth) + features/auth/ + first screen
+react-native-expo-boilerplate add screen auth login           # flat screen directly under auth
+react-native-expo-boilerplate add screen auth signUp          # ...
+react-native-expo-boilerplate add screen auth forgotPassword  # ...
 ```
 
 Versus unchanged hierarchical:
 
 ```
-codingpixel-expo-app add role customer
-codingpixel-expo-app add feature customer dashboard
-codingpixel-expo-app add screen customer dashboard home
+react-native-expo-boilerplate add role customer
+react-native-expo-boilerplate add feature customer dashboard
+react-native-expo-boilerplate add screen customer dashboard home
 ```
 
 ## Command grammar — arity dispatch

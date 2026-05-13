@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add three post-scaffold CLI commands (`add role`, `add feature`, `add screen`) that scaffold Expo Router groups and MVVM feature folders in an already-scaffolded `codingpixel-expo-app` project, with atomic write/rollback semantics.
+**Goal:** Add three post-scaffold CLI commands (`add role`, `add feature`, `add screen`) that scaffold Expo Router groups and MVVM feature folders in an already-scaffolded `react-native-expo-boilerplate` project, with atomic write/rollback semantics.
 
 **Architecture:** New module `src/commands/` containing `role.ts`, `feature.ts`, `screen.ts`, and `shared.ts`. The shared module owns name normalization, validation, existence checks, file/dir writers, an in-memory journal type for atomic rollback, and the `routes.tsx` / redirect mutators. `src/index.ts` gets an early dispatcher branch that routes `add role|feature|screen` to the new module before falling through to the existing `runAdd` recipe dispatcher in `src/add.ts` (untouched).
 
@@ -2654,7 +2654,7 @@ Scaffold the navigation/feature layout in an already-scaffolded project.
 Creates an Expo Router group, the feature root, and one starter screen.
 
 ```bash
-codingpixel-expo add role auth
+react-native-expo-boilerplate add role auth
 # prompts: First feature name? dashboard
 # prompts: First screen name?  onBoarding
 ```
@@ -2681,7 +2681,7 @@ Also registers `<Stack.Screen name="(auth)" />` in `src/app/routes.tsx`.
 Adds a sibling feature under an existing role.
 
 ```bash
-codingpixel-expo add feature auth profile
+react-native-expo-boilerplate add feature auth profile
 # prompts: Screen name?            edit
 # prompts: Make initial screen?    no
 ```
@@ -2695,7 +2695,7 @@ If you answer "yes" to the initial-screen prompt, the redirect in `src/app/(<rol
 Adds a sibling screen to an existing feature.
 
 ```bash
-codingpixel-expo add screen auth dashboard teamDetails
+react-native-expo-boilerplate add screen auth dashboard teamDetails
 # prompts: Make initial screen? no
 ```
 
@@ -2736,9 +2736,9 @@ Append immediately after the existing recipe table in `templates/base/README.md`
 ### Generate role / feature / screen
 
 ```bash
-codingpixel-expo add role <role>             # prompts feature + screen
-codingpixel-expo add feature <role> <name>   # prompts screen + initial?
-codingpixel-expo add screen <role> <feature> <name>   # prompts initial?
+react-native-expo-boilerplate add role <role>             # prompts feature + screen
+react-native-expo-boilerplate add feature <role> <name>   # prompts screen + initial?
+react-native-expo-boilerplate add screen <role> <feature> <name>   # prompts initial?
 ```
 
 Names are normalized to `camelCase`. ViewModels and components use `PascalCase`. Atomic: rolls back on failure.
@@ -2775,7 +2775,7 @@ Create `templates/claude-command/add-role.md`:
 description: Scaffold a role (Expo Router group + feature folder + starter screen) in this project.
 ---
 
-Run `codingpixel-expo add role` from the project root. The CLI will prompt for the first feature name and first screen name, then create:
+Run `react-native-expo-boilerplate add role` from the project root. The CLI will prompt for the first feature name and first screen name, then create:
 
 - `src/features/<role>/<feature>/types.ts`
 - `src/features/<role>/<feature>/<screen>/index.tsx`
@@ -2804,7 +2804,7 @@ Create `templates/claude-command/add-feature.md`:
 description: Add a new feature (folder + one screen) under an existing role in this project.
 ---
 
-Run `codingpixel-expo add feature <role> <name>` from the project root. The CLI will prompt for a screen name and whether the new screen should become the role's initial (redirect) screen.
+Run `react-native-expo-boilerplate add feature <role> <name>` from the project root. The CLI will prompt for a screen name and whether the new screen should become the role's initial (redirect) screen.
 
 Creates:
 
@@ -2830,7 +2830,7 @@ Create `templates/claude-command/add-screen.md`:
 description: Add a screen to an existing feature in this project.
 ---
 
-Run `codingpixel-expo add screen <role> <feature> <name>` from the project root. The CLI prompts whether the new screen should become the role's initial (redirect) screen.
+Run `react-native-expo-boilerplate add screen <role> <feature> <name>` from the project root. The CLI prompts whether the new screen should become the role's initial (redirect) screen.
 
 Creates:
 

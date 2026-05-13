@@ -6,7 +6,7 @@
 
 ## Goal
 
-Add three new post-scaffold commands to the `codingpixel-expo-app` CLI so users can generate feature folders, route groups, and MVVM screens after the initial scaffold without hand-rolling boilerplate.
+Add three new post-scaffold commands to the `react-native-expo-boilerplate` CLI so users can generate feature folders, route groups, and MVVM screens after the initial scaffold without hand-rolling boilerplate.
 
 - `add role <name>` — creates a feature root + Expo Router group + first feature + first screen.
 - `add feature <role> <name>` — adds a new feature under an existing role, with one screen.

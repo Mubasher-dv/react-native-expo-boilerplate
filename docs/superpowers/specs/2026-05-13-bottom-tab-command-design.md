@@ -16,7 +16,7 @@ Hierarchical roles only. Standalone features (auth-style) are explicitly out of 
 ## Command shape
 
 ```
-codingpixel-expo-app add bottom-tab <role>
+react-native-expo-boilerplate add bottom-tab <role>
 ```
 
 Prompts:
@@ -187,9 +187,9 @@ Extend `tests/commands/shared.test.ts` for new helpers (path computations, templ
 ## README + slash-command updates
 
 - **README.md** — new "Generate bottom-tabs" subsection; full `add bottom-tab customer` example with 3 tabs; mention idempotent re-splice into outer Stack; explain tabs reachable via programmatic navigation (outer redirect untouched).
-- **templates/base/README.md** — single line under recipe cheatsheet: `codingpixel-expo-app add bottom-tab <role>` with parenthetical "(2–5 tabs)".
+- **templates/base/README.md** — single line under recipe cheatsheet: `react-native-expo-boilerplate add bottom-tab <role>` with parenthetical "(2–5 tabs)".
 - **templates/claude-command/add-bottom-tab.md** — NEW slash-command doc.
-- **Normalize CLI invocation across all docs**: `codingpixel-expo ` (with trailing space) → `codingpixel-expo-app ` everywhere in README.md, templates/base/README.md, templates/claude-command/*.md, and the standalone-feature spec.
+- **Normalize CLI invocation across all docs**: `react-native-expo-boilerplate ` (with trailing space) → `react-native-expo-boilerplate ` everywhere in README.md, templates/base/README.md, templates/claude-command/*.md, and the standalone-feature spec.
 
 ## Out of scope
 
