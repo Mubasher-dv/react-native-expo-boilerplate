@@ -6,7 +6,7 @@ Dispatched by argument arity.
 
 ## `add screen <feature> <name>` — flat (2-arg)
 
-Run `codingpixel-expo-app add screen <feature> <name>`. Adds a sibling screen to an existing standalone feature (one created via `add feature <name>` 1-arg form). CLI prompts whether the new screen should become the feature's initial (redirect) screen.
+Run `react-native-expo-boilerplate add screen <feature> <name>`. Adds a sibling screen to an existing standalone feature (one created via `add feature <name>` 1-arg form). CLI prompts whether the new screen should become the feature's initial (redirect) screen.
 
 Creates:
 
@@ -19,7 +19,7 @@ Refuses if the feature is not a standalone feature, the screen folder already ex
 
 ## `add screen <role> <feature> <name>` — nested (3-arg)
 
-Run `codingpixel-expo-app add screen <role> <feature> <name>`. Adds a sibling screen to a nested feature under a hierarchical role. CLI prompts makeInitial.
+Run `react-native-expo-boilerplate add screen <role> <feature> <name>`. Adds a sibling screen to a nested feature under a hierarchical role. CLI prompts makeInitial.
 
 Creates:
 

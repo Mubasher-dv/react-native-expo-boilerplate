@@ -2,7 +2,7 @@
 description: Scaffold a role (Expo Router group + feature folder + starter screen) in this project.
 ---
 
-Run `codingpixel-expo-app add role` from the project root. The CLI will prompt for the first feature name and first screen name, then create:
+Run `react-native-expo-boilerplate add role` from the project root. The CLI will prompt for the first feature name and first screen name, then create:
 
 - `src/features/<role>/<feature>/types.ts`
 - `src/features/<role>/<feature>/<screen>/index.tsx`

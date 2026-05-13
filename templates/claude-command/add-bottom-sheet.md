@@ -1,6 +1,6 @@
 ---
 name: add-bottom-sheet
-description: Retrofit bottom-sheet support into an already-scaffolded codingpixel-expo-app project. Installs @gorhom/bottom-sheet via `expo install` and overlays the 5 bottom-sheet appComponents.
+description: Retrofit bottom-sheet support into an already-scaffolded react-native-expo-boilerplate project. Installs @gorhom/bottom-sheet via `expo install` and overlays the 5 bottom-sheet appComponents.
 ---
 
 # /add-bottom-sheet — Retrofit bottom-sheet into an existing project
@@ -10,12 +10,12 @@ Use when the user scaffolded a project with `bottom-sheet=0` (or via an older CL
 ## Preconditions
 
 - cwd must be the Expo project root (the dir containing `app.json`).
-- Project was scaffolded by `codingpixel-expo-app` (the `add` subcommand assumes the MyRoster-mirrored layout — `src/ui/appComponents/`, lockfile at root, etc.).
+- Project was scaffolded by `react-native-expo-boilerplate` (the `add` subcommand assumes the MyRoster-mirrored layout — `src/ui/appComponents/`, lockfile at root, etc.).
 
 ## Run
 
 ```bash
-npx --yes codingpixel-expo-app add bottom-sheet
+npx --yes react-native-expo-boilerplate add bottom-sheet
 ```
 
 No env vars required. PM is detected from the project's lockfile (`yarn.lock` vs `package-lock.json`).

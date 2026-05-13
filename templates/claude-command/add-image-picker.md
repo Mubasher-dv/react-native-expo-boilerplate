@@ -1,6 +1,6 @@
 ---
 name: add-image-picker
-description: Retrofit image-picker support into an already-scaffolded codingpixel-expo-app project. Installs expo-image-picker via `expo install`, drops PermissionService, splices media constants, and adds the plugin entry to app.json.
+description: Retrofit image-picker support into an already-scaffolded react-native-expo-boilerplate project. Installs expo-image-picker via `expo install`, drops PermissionService, splices media constants, and adds the plugin entry to app.json.
 ---
 
 # /add-image-picker — Retrofit image-picker into an existing project
@@ -10,12 +10,12 @@ Use when the user scaffolded a project with `image-picker=0` (or via an older CL
 ## Preconditions
 
 - cwd must be the Expo project root (the dir containing `app.json`).
-- Project was scaffolded by `codingpixel-expo-app` (the `add` subcommand assumes the MyRoster-mirrored layout — `src/core/services/`, `src/core/utils/constants.ts`, lockfile at root, etc.).
+- Project was scaffolded by `react-native-expo-boilerplate` (the `add` subcommand assumes the MyRoster-mirrored layout — `src/core/services/`, `src/core/utils/constants.ts`, lockfile at root, etc.).
 
 ## Run
 
 ```bash
-npx --yes codingpixel-expo-app add image-picker
+npx --yes react-native-expo-boilerplate add image-picker
 ```
 
 No env vars required. PM is detected from the project's lockfile (`yarn.lock` vs `package-lock.json`).

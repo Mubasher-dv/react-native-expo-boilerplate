@@ -6,7 +6,7 @@ Dispatched by argument arity.
 
 ## `add feature <name>` — standalone (1-arg)
 
-Run `codingpixel-expo-app add feature <name>`. Creates a top-level feature owning its own Expo Router group with flat screens directly underneath. Use for auth-style namespaces where each screen is independent (login / signUp / forgotPassword).
+Run `react-native-expo-boilerplate add feature <name>`. Creates a top-level feature owning its own Expo Router group with flat screens directly underneath. Use for auth-style namespaces where each screen is independent (login / signUp / forgotPassword).
 
 Prompts:
 - First screen name
@@ -25,7 +25,7 @@ Add more screens with `add screen <name> <screen>` (2-arg form).
 
 ## `add feature <role> <name>` — nested (2-arg)
 
-Run `codingpixel-expo-app add feature <role> <name>`. Adds a sibling feature under an existing hierarchical role. CLI prompts for screen name + makeInitial.
+Run `react-native-expo-boilerplate add feature <role> <name>`. Adds a sibling feature under an existing hierarchical role. CLI prompts for screen name + makeInitial.
 
 Creates:
 

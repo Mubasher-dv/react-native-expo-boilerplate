@@ -2,7 +2,7 @@
 description: Scaffold a bottom-tabs route group inside an existing hierarchical role.
 ---
 
-Run `codingpixel-expo-app add bottom-tab <role>` from the project root. The CLI will prompt for the number of tabs (2–5) and each tab's name, then create the tabs group inside the role's Expo Router group.
+Run `react-native-expo-boilerplate add bottom-tab <role>` from the project root. The CLI will prompt for the number of tabs (2–5) and each tab's name, then create the tabs group inside the role's Expo Router group.
 
 Creates:
 

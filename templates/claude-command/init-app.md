@@ -1,6 +1,6 @@
 ---
 name: init-app
-description: Scaffold a new Expo project using codingpixel-expo-app with full prompt control + PM choice. Slash-command flow is non-TTY — all answers are resolved BEFORE invoking the CLI.
+description: Scaffold a new Expo project using react-native-expo-boilerplate with full prompt control + PM choice. Slash-command flow is non-TTY — all answers are resolved BEFORE invoking the CLI.
 ---
 
 # /init-app — Scaffold Expo project
@@ -26,7 +26,7 @@ Substitute every answer into the command. **Replace `my-app` with the resolved a
 EXPO_INCLUDE_BOTTOM_SHEET="0" \
   EXPO_INCLUDE_IMAGE_PICKER="0" \
   EXPO_PACKAGE_MANAGER="yarn" \
-  npx --yes codingpixel-expo-app my-app
+  npx --yes react-native-expo-boilerplate my-app
 ```
 
 ## Step 3 — After the CLI completes
