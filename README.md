@@ -20,7 +20,8 @@ The bin name is `react-native-expo-boilerplate` (used after global install). Inv
 
 Skipped something at scaffold time? Retrofit it later without re-running the full scaffolder.
 
-> **Vocabulary:** these commands run **recipes** — packaged units of change. Two flavors today:
+> **Vocabulary:** these commands run **recipes** — packaged units of change. Three flavors:
+> - **font recipes** fetch Google Fonts tarballs, copy TTFs, rewrite the `Fonts` enum, and wire `useFonts` into `_layout.tsx`. Example: `fonts`.
 > - **library recipes** install a third-party package + boilerplate (component overlay, constants splice, `app.json` plugin entry). Examples: `bottom-sheet`, `image-picker`.
 > - **asset recipes** prompt for inputs interactively and update project assets / native config. Examples: `app-icon`, `splash`.
 >
@@ -35,9 +36,32 @@ Skipped something at scaffold time? Retrofit it later without re-running the ful
    npx react-native-expo-boilerplate add <recipe>
    ```
 
-   `<recipe>` is one of `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
+   `<recipe>` is one of `fonts`, `bottom-sheet`, `image-picker`, `app-icon`, `splash`.
 
 3. Rebuild afterwards so the changes land in the native projects (see each recipe below for the exact command).
+
+### Font recipe
+
+**`fonts`** — interactively prompts for a primary (and optional secondary) [Google Fonts](https://fonts.google.com/) family name (e.g. `Inter`, `Roboto`, `Sansita`). Behind the scenes:
+
+1. Fetches the `@expo-google-fonts/<family>` tarball from npm (no permanent `package.json` entry — fonts live as static assets).
+2. Copies the selected `.ttf` files to `src/assets/fonts/`.
+3. Rewrites `src/ui/theme/fonts.ts` with a typed `export enum Fonts { … }`.
+4. Injects `useFonts(...)` + a loading guard into `src/app/_layout.tsx` (within a `// codingpixel:fonts-start` / `// codingpixel:fonts-end` marker block).
+
+```bash
+npx react-native-expo-boilerplate add fonts
+```
+
+Re-runnable to swap or remove fonts. **No native rebuild needed** — `expo-font` is already installed; restart Metro (`yarn start`) to pick up the new TTFs.
+
+Supports `expo-splash-screen` interplay — if splash is already installed, the `useFonts` effect and `SplashScreen.hideAsync()` are colocated in the same block.
+
+Non-interactive (CI / slash-command) usage:
+
+```bash
+EXPO_PRIMARY_FONT="Inter" EXPO_SECONDARY_FONT="Sansita" npx react-native-expo-boilerplate add fonts
+```
 
 ### Library recipes
 
@@ -110,7 +134,7 @@ Rebuild after: `npx expo prebuild --clean`, then `yarn ios` / `yarn android`.
 
 ### Behavior
 
-All four recipes:
+All recipes:
 
 - Refuse to run when `app.json` is missing — must be invoked from an Expo project root.
 - Are **idempotent on the patch side** — plugin entry, constants splice, `expo install`, and asset path writes all skip / converge cleanly when already applied. **File overlays and asset copies overwrite** the destination, so re-running clobbers any local edits to the affected files.
@@ -288,9 +312,13 @@ Subsequent runs use the dev-client + bundler (`yarn start` = `expo start --dev-c
 
 ## Fonts
 
-Fonts are intentionally disabled in v0.1.x — generated `src/ui/theme/fonts.ts` exports `Fonts = {} as const` + `FontKey = never`, and `_layout.tsx` ships without `useFonts`. Apps that need custom fonts wire `expo-font` themselves (drop `.ttf`s into `assets/fonts/`, populate `Fonts`, add `useFonts(...)` + a loading guard in `_layout.tsx`).
+Disabled by default — `src/ui/theme/fonts.ts` exports an empty `Fonts` enum and `_layout.tsx` ships without `useFonts`. Use the `add fonts` recipe to install Google Fonts families:
 
-`expo-font` is already in `dependencies`, so no extra install is needed.
+```bash
+npx react-native-expo-boilerplate add fonts
+```
+
+See the [`fonts` recipe](#font-recipe) section above for full details. `expo-font` is already in `dependencies` — no extra install needed, no native rebuild required.
 
 ## `@/*` alias
 
@@ -326,8 +354,8 @@ Required when stdin is not a TTY (e.g. slash-command flows).
 | `EXPO_INCLUDE_BOTTOM_SHEET` | `"0"` or `"1"` | Other values throw before any fs mutation. |
 | `EXPO_INCLUDE_IMAGE_PICKER` | `"0"` or `"1"` | Same. |
 | `EXPO_PACKAGE_MANAGER` | `"yarn"` or `"npm"` | Optional override; auto-detect otherwise. Other values throw. |
-
-`EXPO_PRIMARY_FONT` / `EXPO_SECONDARY_FONT` are silently ignored (fonts disabled — see "Fonts" above).
+| `EXPO_PRIMARY_FONT` | string | Family name for `add fonts` (e.g. `"Inter"`). Required when stdin is not a TTY. |
+| `EXPO_SECONDARY_FONT` | string | Optional secondary family for `add fonts` (e.g. `"Sansita"`). Empty string = primary only. |
 
 ## Bin name
 
