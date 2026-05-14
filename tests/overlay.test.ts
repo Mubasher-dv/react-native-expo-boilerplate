@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { applySentinels, rewriteImports } from "../src/overlay.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { BackendType } from "../src/prompts.js";
+import { applySentinels, rewriteImports, isSkippedForBackend, applyBase } from "../src/overlay.js";
 
 describe("applySentinels", () => {
   it("replaces module-position sentinel", () => {
@@ -113,5 +117,108 @@ describe("rewriteImports", () => {
     const src = `import a from "@/x"; import b from '@/y';`;
     const out = rewriteImports(src, { "@/": "@new/" });
     expect(out).toBe(`import a from "@new/x"; import b from '@new/y';`);
+  });
+});
+
+describe("isSkippedForBackend", () => {
+  it("firebase-js skips core/tanstack dir", () => {
+    expect(isSkippedForBackend("/app/src/core/tanstack/index.tsx", "firebase-js")).toBe(true);
+  });
+  it("firebase-rn skips core/tanstack dir", () => {
+    expect(isSkippedForBackend("/app/src/core/tanstack/index.tsx", "firebase-rn")).toBe(true);
+  });
+  it("supabase keeps core/tanstack dir", () => {
+    expect(isSkippedForBackend("/app/src/core/tanstack/index.tsx", "supabase")).toBe(false);
+  });
+  it("custom-backend keeps core/tanstack dir", () => {
+    expect(isSkippedForBackend("/app/src/core/tanstack/index.tsx", "custom-backend")).toBe(false);
+  });
+
+  it("firebase-js skips core/utils/config.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/config.ts", "firebase-js")).toBe(true);
+  });
+  it("firebase-rn skips core/utils/config.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/config.ts", "firebase-rn")).toBe(true);
+  });
+  it("supabase skips core/utils/config.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/config.ts", "supabase")).toBe(true);
+  });
+  it("custom-backend keeps core/utils/config.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/config.ts", "custom-backend")).toBe(false);
+  });
+
+  it("firebase-js skips core/utils/endpoints.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/endpoints.ts", "firebase-js")).toBe(true);
+  });
+  it("firebase-rn skips core/utils/endpoints.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/endpoints.ts", "firebase-rn")).toBe(true);
+  });
+  it("supabase skips core/utils/endpoints.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/endpoints.ts", "supabase")).toBe(true);
+  });
+  it("custom-backend keeps core/utils/endpoints.ts", () => {
+    expect(isSkippedForBackend("/app/src/core/utils/endpoints.ts", "custom-backend")).toBe(false);
+  });
+
+  it("keeps non-backend files for any backend", () => {
+    expect(isSkippedForBackend("/app/src/core/redux/store.ts", "firebase-js")).toBe(false);
+    expect(isSkippedForBackend("/app/src/ui/components/Button.tsx", "firebase-rn")).toBe(false);
+  });
+
+  it("handles Windows backslash paths", () => {
+    expect(isSkippedForBackend("C:\\app\\src\\core\\tanstack\\index.tsx", "firebase-js")).toBe(true);
+  });
+});
+
+describe("applyBase — file-skip integration", () => {
+  let target: string;
+  let tplRoot: string;
+
+  beforeEach(() => {
+    target = fs.mkdtempSync(path.join(os.tmpdir(), "applyBase-out-"));
+    tplRoot = fs.mkdtempSync(path.join(os.tmpdir(), "applyBase-tpl-"));
+    fs.mkdirSync(path.join(tplRoot, "base/src/core/tanstack"), { recursive: true });
+    fs.writeFileSync(path.join(tplRoot, "base/src/core/tanstack/index.ts"), "export {};");
+    fs.mkdirSync(path.join(tplRoot, "base/src/core/redux"), { recursive: true });
+    fs.writeFileSync(path.join(tplRoot, "base/src/core/redux/store.ts"), "export {};");
+    fs.mkdirSync(path.join(tplRoot, "base/src/core/utils"), { recursive: true });
+    fs.writeFileSync(path.join(tplRoot, "base/src/core/utils/config.ts"), "export {};");
+    fs.writeFileSync(path.join(tplRoot, "base/src/core/utils/endpoints.ts"), "export {};");
+    fs.writeFileSync(path.join(tplRoot, "base/src/core/utils/constants.ts"), "export {};");
+  });
+
+  afterEach(() => {
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.rmSync(tplRoot, { recursive: true, force: true });
+  });
+
+  it("firebase-js: skips core/tanstack, copies core/redux", () => {
+    applyBase(target, tplRoot, "firebase-js");
+    expect(fs.existsSync(path.join(target, "src/core/tanstack"))).toBe(false);
+    expect(fs.existsSync(path.join(target, "src/core/redux/store.ts"))).toBe(true);
+  });
+
+  it("custom-backend: copies core/tanstack", () => {
+    applyBase(target, tplRoot, "custom-backend");
+    expect(fs.existsSync(path.join(target, "src/core/tanstack/index.ts"))).toBe(true);
+  });
+
+  it("supabase: skips config.ts and endpoints.ts, keeps constants.ts", () => {
+    applyBase(target, tplRoot, "supabase");
+    expect(fs.existsSync(path.join(target, "src/core/utils/config.ts"))).toBe(false);
+    expect(fs.existsSync(path.join(target, "src/core/utils/endpoints.ts"))).toBe(false);
+    expect(fs.existsSync(path.join(target, "src/core/utils/constants.ts"))).toBe(true);
+  });
+
+  it("firebase-js: skips config.ts and endpoints.ts", () => {
+    applyBase(target, tplRoot, "firebase-js");
+    expect(fs.existsSync(path.join(target, "src/core/utils/config.ts"))).toBe(false);
+    expect(fs.existsSync(path.join(target, "src/core/utils/endpoints.ts"))).toBe(false);
+  });
+
+  it("custom-backend: keeps config.ts and endpoints.ts", () => {
+    applyBase(target, tplRoot, "custom-backend");
+    expect(fs.existsSync(path.join(target, "src/core/utils/config.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(target, "src/core/utils/endpoints.ts"))).toBe(true);
   });
 });

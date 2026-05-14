@@ -292,6 +292,27 @@ All names are accepted as `kebab-case`, `snake_case`, `space separated`, or `cam
 
 Every command is all-or-nothing. If any step fails (e.g. a malformed `routes.tsx`), the command rolls back every file it just created or modified and surfaces the underlying error.
 
+## Backend selection
+
+The scaffold prompt `What backend type?` determines which packages are installed and which template files are copied:
+
+| Choice (prompt) | `backendType` | Packages added | Template overlay |
+|---|---|---|---|
+| `Firebase (JS SDK)` | `firebase-js` | `firebase` | `templates/firebase-js/` — `src/core/firebase/index.ts` |
+| `React Native Firebase` | `firebase-rn` | `@react-native-firebase/app` + auth/firestore/storage | `templates/firebase-rn/` — `src/core/firebase/index.ts` |
+| `Supabase` | `supabase` | `@tanstack/react-query` + `@supabase/supabase-js` | `templates/supabase/` — `src/core/supabase/index.ts` |
+| `Custom / none` | `custom-backend` | `@tanstack/react-query` + `axios` | (none) |
+
+**Firebase sub-prompt:** selecting `Firebase` shows a second prompt — `Firebase SDK: Firebase JS SDK (Expo Go compatible)` → `firebase-js`; `React Native Firebase (requires dev client)` → `firebase-rn`.
+
+**firebase-rn note:** React Native Firebase installs native modules that require a custom dev client. Expo Go is not supported. After scaffold, run `yarn ios` / `yarn android` to build the dev client first.
+
+**TanStack Query provider:** inserted into `_layout.tsx` for `supabase` and `custom-backend`; omitted for firebase backends (which use Firebase's own reactivity).
+
+**Firebase + accessToken:** when `firebase-js` or `firebase-rn` is selected, the CLI removes the `accessToken` field from `src/core/redux/slices/userSlice.ts` (and its `setAccessToken` reducer and `core/utils/config.ts` axios interceptor) — Firebase manages its own token lifecycle.
+
+Non-interactive use: set `EXPO_BACKEND_TYPE` to one of the four values listed above (see [Environment variables](#environment-variables-non-interactive-runs)).
+
 ## Not Expo Go-compatible
 
 This template ships native modules that Expo Go can't load:
@@ -354,6 +375,7 @@ Required when stdin is not a TTY (e.g. slash-command flows).
 | `EXPO_INCLUDE_BOTTOM_SHEET` | `"0"` or `"1"` | Other values throw before any fs mutation. |
 | `EXPO_INCLUDE_IMAGE_PICKER` | `"0"` or `"1"` | Same. |
 | `EXPO_PACKAGE_MANAGER` | `"yarn"` or `"npm"` | Optional override; auto-detect otherwise. Other values throw. |
+| `EXPO_BACKEND_TYPE` | `"firebase-js"` \| `"firebase-rn"` \| `"supabase"` \| `"custom-backend"` | Backend selection. Required in non-TTY; throws when unset. Other values throw. |
 | `EXPO_PRIMARY_FONT` | string | Family name for `add fonts` (e.g. `"Inter"`). Required when stdin is not a TTY. |
 | `EXPO_SECONDARY_FONT` | string | Optional secondary family for `add fonts` (e.g. `"Sansita"`). Empty string = primary only. |
 

@@ -23,13 +23,18 @@ const STRICT_BOOL_VARS = [
 ] as const;
 
 /**
- * SHAPE-only validation of EXPO_* env vars. MUST be called from `src/index.ts`
- * BEFORE `resolveTargetDir` (Phase 1) so invalid input throws BEFORE any fs
- * mutation creates an orphan empty target dir.
+ * Shape + presence validation of EXPO_* env vars. MUST be called from
+ * `src/index.ts` BEFORE `resolveTargetDir` (Phase 1) so invalid or missing
+ * input throws BEFORE any fs mutation creates an orphan empty target dir.
+ *
+ * In non-TTY mode all interactive-prompt vars are required up-front so that
+ * the failure is clean (no orphan dir, no partial scaffold).
  *
  * Per PLAN_V5.md Phase 2 step 2 (v5-r6).
  */
 export function validateEnvVars(): void {
+  const tty = Boolean(process.stdin.isTTY);
+
   const pm = process.env.EXPO_PACKAGE_MANAGER;
   if (pm !== undefined && pm !== "" && pm !== "yarn" && pm !== "npm") {
     throw new Error(
@@ -41,12 +46,23 @@ export function validateEnvVars(): void {
     if (v !== undefined && v !== "" && v !== "0" && v !== "1") {
       throw new Error(`${key}: expected "0" or "1", got "${v}"`);
     }
+    if (!tty && (v === undefined || v === "")) {
+      throw new Error(
+        `${key} is required in non-TTY mode. Set to "0" or "1".`,
+      );
+    }
   }
-  // EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT accept any string — no shape check.
+  // EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT accept any string — no shape check,
+  // and empty is valid (skips fonts), so no presence check in non-TTY either.
   const bt = process.env.EXPO_BACKEND_TYPE;
   if (bt !== undefined && bt !== "" && !BACKEND_TYPE_VALUES.includes(bt as BackendType)) {
     throw new Error(
       `EXPO_BACKEND_TYPE: expected one of "firebase-js", "firebase-rn", "supabase", "custom-backend", got "${bt}"`,
+    );
+  }
+  if (!tty && (!bt || bt === "")) {
+    throw new Error(
+      'EXPO_BACKEND_TYPE is required in non-TTY mode. Set to one of "firebase-js", "firebase-rn", "supabase", "custom-backend".',
     );
   }
 }
@@ -89,11 +105,53 @@ export async function detectPackageManager(): Promise<PackageManager> {
 
 /**
  * Gather all answers — env vars take precedence; missing values prompted from TTY.
- * Non-TTY + missing bottom-sheet/image-picker → throw. Fonts: env-var first,
+ * Non-TTY + missing backend/bottom-sheet/image-picker → throw. Fonts: env-var first,
  * TTY fallback, else empty (no error — empty primary skips fonts gracefully).
+ *
+ * Prompt order: backend → fonts → bottom-sheet → image-picker.
  */
 export async function gatherAnswers(): Promise<Answers> {
   const tty = Boolean(process.stdin.isTTY);
+
+  // Backend type — asked first; drives template overlay and dep selection.
+  let backendType: BackendType;
+  const envBackendType = process.env.EXPO_BACKEND_TYPE;
+  if (envBackendType && BACKEND_TYPE_VALUES.includes(envBackendType as BackendType)) {
+    backendType = envBackendType as BackendType;
+  } else if (tty) {
+    const btAns = await prompts({
+      type: "select",
+      name: "backend",
+      message: "Backend type?",
+      choices: [
+        { title: "Firebase", value: "firebase" },
+        { title: "Supabase", value: "supabase" },
+        { title: "Custom", value: "custom-backend" },
+      ],
+    });
+    if (!btAns.backend || btAns.backend === "custom-backend") {
+      backendType = (btAns.backend as BackendType) ?? "custom-backend";
+    } else if (btAns.backend === "supabase") {
+      backendType = "supabase";
+    } else {
+      // Firebase — ask which SDK
+      const fbAns = await prompts({
+        type: "select",
+        name: "firebaseSdk",
+        message: "Firebase SDK?",
+        choices: [
+          { title: "Firebase JS SDK (Expo Go compatible)", value: "firebase-js" },
+          { title: "React Native Firebase (requires dev client)", value: "firebase-rn" },
+        ],
+      });
+      backendType = (fbAns.firebaseSdk as BackendType) ?? "firebase-js";
+    }
+  } else {
+    throw new Error(
+      "Missing required answer and stdin is not a TTY. Set " +
+        'EXPO_BACKEND_TYPE to one of "firebase-js", "firebase-rn", "supabase", "custom-backend".',
+    );
+  }
 
   // Fonts — env-var first, TTY prompt fallback, else empty (skip).
   let primaryFont: string;
@@ -170,5 +228,5 @@ export async function gatherAnswers(): Promise<Answers> {
   const packageManager = await detectPackageManager();
   log.info(`Package manager: ${packageManager}`);
 
-  return { primaryFont, secondaryFont, bottomSheet, imagePicker, packageManager, backendType: "custom-backend" };
+  return { primaryFont, secondaryFont, bottomSheet, imagePicker, packageManager, backendType };
 }

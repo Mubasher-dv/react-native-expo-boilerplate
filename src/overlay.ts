@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import fse from "fs-extra";
+import type { BackendType } from "./prompts.js";
 
 // ---------- Sentinels ----------
 
@@ -124,6 +125,20 @@ export function rewriteImports(source: string, aliasMap: AliasMap): string {
 
 // ---------- Copying ----------
 
+export function isSkippedForBackend(src: string, backendType: BackendType): boolean {
+  const normalized = src.replace(/\\/g, "/");
+  if (backendType === "firebase-js" || backendType === "firebase-rn") {
+    if (normalized.includes("/core/tanstack/") || normalized.endsWith("/core/tanstack")) return true;
+    if (normalized.includes("/core/utils/config.ts")) return true;
+    if (normalized.includes("/core/utils/endpoints.ts")) return true;
+  }
+  if (backendType === "supabase") {
+    if (normalized.includes("/core/utils/config.ts")) return true;
+    if (normalized.includes("/core/utils/endpoints.ts")) return true;
+  }
+  return false;
+}
+
 /**
  * Recursively copy `srcRoot` → `destRoot`. Idempotent: existing files at dest
  * are overwritten (we own the template overlay, not the user).
@@ -141,9 +156,15 @@ export function copyTemplate(srcRoot: string, destRoot: string): void {
  * `templates/base/` lives inside this CLI package. `target` is the user's
  * generated app dir (post-create-expo-app + cleanupBlankTemplate).
  */
-export function applyBase(target: string, templatesRoot: string): void {
+export function applyBase(target: string, templatesRoot: string, backendType: BackendType): void {
   const baseDir = path.join(templatesRoot, "base");
-  copyTemplate(baseDir, target);
+  if (!fs.existsSync(baseDir)) {
+    throw new Error(`copyTemplate: source missing: ${baseDir}`);
+  }
+  fse.copySync(baseDir, target, {
+    overwrite: true,
+    filter: (src) => !isSkippedForBackend(src, backendType),
+  });
 }
 
 /**
@@ -171,4 +192,28 @@ export function applyImagePicker(target: string, templatesRoot: string): void {
   if (fs.existsSync(srcSubtree)) {
     copyTemplate(srcSubtree, path.join(target, "src"));
   }
+}
+
+export function applyFirebaseJs(target: string, templatesRoot: string): void {
+  const dir = path.join(templatesRoot, "firebase-js");
+  if (!fs.existsSync(dir)) {
+    throw new Error(`applyFirebaseJs: source missing: ${dir}`);
+  }
+  copyTemplate(dir, target);
+}
+
+export function applyFirebaseRn(target: string, templatesRoot: string): void {
+  const dir = path.join(templatesRoot, "firebase-rn");
+  if (!fs.existsSync(dir)) {
+    throw new Error(`applyFirebaseRn: source missing: ${dir}`);
+  }
+  copyTemplate(dir, target);
+}
+
+export function applySupabase(target: string, templatesRoot: string): void {
+  const dir = path.join(templatesRoot, "supabase");
+  if (!fs.existsSync(dir)) {
+    throw new Error(`applySupabase: source missing: ${dir}`);
+  }
+  copyTemplate(dir, target);
 }

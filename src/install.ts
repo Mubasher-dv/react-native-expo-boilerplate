@@ -16,8 +16,6 @@ export function buildAlwaysInstalledList(workletsPkg: string): string[] {
     "react-redux",
     "redux-persist",
     "react-native-mmkv",
-    "@tanstack/react-query",
-    "axios",
     "formik",
     "yup",
     "expo-router",
@@ -71,6 +69,27 @@ export function buildConditionalDeps(answers: Answers): string[] {
   const out: string[] = [];
   if (answers.bottomSheet) out.push("@gorhom/bottom-sheet");
   if (answers.imagePicker) out.push("expo-image-picker");
+
+  switch (answers.backendType) {
+    case "firebase-js":
+      out.push("firebase");
+      break;
+    case "firebase-rn":
+      out.push(
+        "@react-native-firebase/app",
+        "@react-native-firebase/auth",
+        "@react-native-firebase/firestore",
+        "@react-native-firebase/storage",
+      );
+      break;
+    case "supabase":
+      out.push("@tanstack/react-query", "@supabase/supabase-js");
+      break;
+    case "custom-backend":
+      out.push("@tanstack/react-query", "axios");
+      break;
+  }
+
   return out;
 }
 

@@ -187,6 +187,7 @@ export async function addFonts(target: string = process.cwd()): Promise<void> {
     bottomSheet: false,
     imagePicker: false,
     packageManager: "npm" as const,
+    backendType: "custom-backend" as const,
   };
   if (layoutSource.includes("@@USE_FONTS_IMPORT@@")) {
     patchLayout(target, buildLayoutReplacements(fakeAnswers, primaryInstalled, secondaryInstalled, hasSplash));

@@ -22,7 +22,7 @@ import {
   moveExpoIconsIntoSrcAssets,
   runCreateExpoApp,
 } from "./scaffold.js";
-import { applyBase, applyBottomSheet, applyImagePicker } from "./overlay.js";
+import { applyBase, applyBottomSheet, applyImagePicker, applyFirebaseJs, applyFirebaseRn, applySupabase } from "./overlay.js";
 import {
   patchAppJson,
   patchAppJsonAssetPaths,
@@ -34,6 +34,7 @@ import {
   patchPackageJsonScripts,
   patchReadme,
   patchTsconfig,
+  patchUserSliceForFirebase,
 } from "./patch.js";
 import { patchBabel } from "./babel.js";
 import { buildLayoutReplacements } from "./fonts.js";
@@ -141,13 +142,14 @@ async function main(): Promise<void> {
   const answers = await gatherAnswers();
   log.info(
     `Answers: primaryFont="${answers.primaryFont}" secondaryFont="${answers.secondaryFont}" ` +
-      `bottomSheet=${answers.bottomSheet} imagePicker=${answers.imagePicker} pm=${answers.packageManager}`,
+      `bottomSheet=${answers.bottomSheet} imagePicker=${answers.imagePicker} ` +
+      `pm=${answers.packageManager} backendType=${answers.backendType}`,
   );
 
   // ---- Apply templates ----
   const templatesRoot = resolveTemplatesRoot();
   log.step("Overlaying templates/base/ …");
-  applyBase(target.dir, templatesRoot);
+  applyBase(target.dir, templatesRoot, answers.backendType);
 
   // Ensure empty dirs that npm strips from the tarball still exist in the
   // generated app (Deviation #22 + extension). All four are intentionally
@@ -169,6 +171,22 @@ async function main(): Promise<void> {
   if (answers.imagePicker) {
     log.step("Overlaying templates/image-picker/ …");
     applyImagePicker(target.dir, templatesRoot);
+  }
+
+  switch (answers.backendType) {
+    case "firebase-js":
+      log.step("Overlaying templates/firebase-js/ …");
+      applyFirebaseJs(target.dir, templatesRoot);
+      break;
+    case "firebase-rn":
+      log.step("Overlaying templates/firebase-rn/ …");
+      applyFirebaseRn(target.dir, templatesRoot);
+      break;
+    case "supabase":
+      log.step("Overlaying templates/supabase/ …");
+      applySupabase(target.dir, templatesRoot);
+      break;
+    // custom-backend: no overlay needed
   }
 
   // ---- Font install (post-base, pre-patches) ----
@@ -224,7 +242,12 @@ async function main(): Promise<void> {
   patchAppJsonAssetPaths(target.dir);
   patchExpoRouterEntry(target.dir);
   patchAppJsonPlugins(target.dir, answers);
-  patchAppJsonBuildProperties(target.dir);
+  patchAppJsonBuildProperties(target.dir, answers);
+
+  if (answers.backendType === "firebase-js" || answers.backendType === "firebase-rn") {
+    log.step("Patching userSlice for Firebase (removing accessToken field) …");
+    patchUserSliceForFirebase(target.dir);
+  }
 
   log.step("Splicing constants + layout sentinels …");
   patchConstants(target.dir, templatesRoot, answers);
@@ -310,6 +333,21 @@ async function main(): Promise<void> {
     "First run takes 3-10 min (native build). After that, `start` is fast. " +
       "iOS needs Xcode + CocoaPods; Android needs SDK + emulator. Not Expo-Go-compatible.",
   );
+  if (answers.backendType === "firebase-rn") {
+    log.warn("React Native Firebase requires native config before you can build:");
+    log.raw("");
+    log.raw("  1. Create a Firebase project at https://console.firebase.google.com");
+    log.raw("  2. Download google-services.json (Android) → place at project root");
+    log.raw("     Set in app.json:  \"android\": { \"googleServicesFile\": \"./google-services.json\" }");
+    log.raw("  3. Download GoogleService-Info.plist (iOS) → place at project root");
+    log.raw("     Set in app.json:  \"ios\": { \"googleServicesFile\": \"./GoogleService-Info.plist\" }");
+    log.raw("  4. app.json already has @react-native-firebase/app plugin");
+    log.raw("     and expo-build-properties with useFrameworks: static (iOS).");
+    log.raw("     See: https://rnfirebase.io/#managed-workflow");
+    log.raw("");
+    log.raw(`  Then run \`${cmdPm} android\` or \`${cmdPm} ios\` to build the dev client.`);
+    log.raw("");
+  }
 }
 
 main().catch((err) => {

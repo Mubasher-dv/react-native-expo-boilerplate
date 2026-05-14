@@ -165,25 +165,37 @@ export function patchAppJsonAssetPaths(target: string): void {
  * `nameOf` equality (user-customized options object preserved).
  */
 export function patchAppJsonPlugins(target: string, answers: Answers): void {
-  if (!answers.imagePicker) return;
+  const needsImagePicker = answers.imagePicker;
+  const needsFirebaseRn = answers.backendType === "firebase-rn";
+  if (!needsImagePicker && !needsFirebaseRn) return;
+
   const p = path.join(target, "app.json");
   const json = readJson<ExpoAppJson>(p);
   json.expo ??= {};
   json.expo.plugins ??= [];
-  const entry: [string, Record<string, unknown>] = [
-    "expo-image-picker",
-    {
-      photosPermission:
-        "The app accesses your photos to let you share them with your friends.",
-      cameraPermission:
-        "The app accesses your camera to let you take photos to share.",
-      // microphone optional — only set if app records video. Add manually:
-      //   "microphonePermission": "...",
-    },
-  ];
-  if (!json.expo.plugins.some((e) => nameOf(e) === nameOf(entry))) {
-    json.expo.plugins.push(entry);
+
+  if (needsImagePicker) {
+    const entry: [string, Record<string, unknown>] = [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "The app accesses your photos to let you share them with your friends.",
+        cameraPermission:
+          "The app accesses your camera to let you take photos to share.",
+      },
+    ];
+    if (!json.expo.plugins.some((e) => nameOf(e) === nameOf(entry))) {
+      json.expo.plugins.push(entry);
+    }
   }
+
+  if (needsFirebaseRn) {
+    const firebasePlugin = "@react-native-firebase/app";
+    if (!json.expo.plugins.some((e) => nameOf(e) === firebasePlugin)) {
+      json.expo.plugins.push(firebasePlugin);
+    }
+  }
+
   writeJson(p, json);
 }
 
@@ -206,20 +218,33 @@ export function patchAppJsonPlugins(target: string, answers: Answers): void {
  *
  * Idempotent via `nameOf` equality (preserves a user-customized entry).
  */
-export function patchAppJsonBuildProperties(target: string): void {
+export function patchAppJsonBuildProperties(target: string, answers: Answers): void {
   const p = path.join(target, "app.json");
   const json = readJson<ExpoAppJson>(p);
   json.expo ??= {};
   json.expo.plugins ??= [];
+  const iosConfig: Record<string, unknown> = { deploymentTarget: "15.1" };
+  if (answers.backendType === "firebase-rn") {
+    iosConfig.useFrameworks = "static";
+  }
   const entry: [string, Record<string, unknown>] = [
     "expo-build-properties",
-    {
-      ios: { deploymentTarget: "15.1" },
-      android: { minSdkVersion: 24 },
-    },
+    { ios: iosConfig, android: { minSdkVersion: 24 } },
   ];
-  if (!json.expo.plugins.some((e) => nameOf(e) === nameOf(entry))) {
+  const existingIdx = json.expo.plugins.findIndex((e) => nameOf(e) === nameOf(entry));
+  if (existingIdx === -1) {
     json.expo.plugins.push(entry);
+  } else if (answers.backendType === "firebase-rn") {
+    // Re-run with firebase-rn on a project previously scaffolded without it:
+    // inject useFrameworks into the existing entry rather than leaving it absent.
+    const existing = json.expo.plugins[existingIdx];
+    if (Array.isArray(existing) && existing[1]) {
+      const opts = existing[1] as Record<string, Record<string, unknown>>;
+      opts.ios ??= {};
+      if (!opts.ios.useFrameworks) {
+        opts.ios.useFrameworks = "static";
+      }
+    }
   }
   writeJson(p, json);
 }
@@ -441,6 +466,48 @@ export function patchReadme(target: string, name: string): void {
     .replaceAll("__APP_NAME__", name);
   if (after === before) return;
   fs.writeFileSync(p, after);
+}
+
+// ---------- userSlice firebase patch (Task 6) ----------
+
+export function patchUserSliceForFirebase(target: string): void {
+  const p = path.join(target, "src/core/redux/slices/userSlice.ts");
+  if (!fileExists(p)) return;
+  let src = fs.readFileSync(p, "utf8");
+
+  // Remove the 4-line header comment that references accessToken + axios
+  src = src.replace(
+    "// Minimal user shape per SPEC §6 (\"dummy user shape\").\n" +
+    "// `accessToken` is required by the axios interceptor in `core/utils/config.ts`\n" +
+    "// — every request reads `store.getState().user?.accessToken` and attaches as\n" +
+    "// `Bearer <token>` if present. Apps replace shape but must keep the field.\n",
+    "",
+  );
+  // Remove accessToken field from User type
+  src = src.replace("\n  accessToken: string | null;", "");
+  // Remove accessToken from initialState object (last field — comma precedes it)
+  src = src.replace(", accessToken: null", "");
+  // Remove setUser line that sets accessToken
+  src = src.replace("\n      state.accessToken = action.payload.accessToken;", "");
+  // Remove entire setAccessToken reducer block
+  src = src.replace(
+    "\n    setAccessToken: (state, action: PayloadAction<string | null>) => {\n" +
+    "      state.accessToken = action.payload;\n" +
+    "    },",
+    "",
+  );
+  // Remove accessToken from clearUser reducer
+  src = src.replace("\n      state.accessToken = null;", "");
+  // Remove setAccessToken from named exports
+  src = src.replace(", setAccessToken", "");
+
+  if (src.includes("accessToken")) {
+    throw new Error(
+      "patchUserSliceForFirebase: accessToken not fully removed — template text may have drifted",
+    );
+  }
+
+  fs.writeFileSync(p, src);
 }
 
 // ---------- babel.config.js (Phase 7 step 4) ----------

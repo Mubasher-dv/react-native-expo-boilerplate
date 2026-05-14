@@ -1,1 +1,1 @@
-export const Images = {};
+export const Images: Record<string, number> = {};

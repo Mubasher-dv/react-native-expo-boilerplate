@@ -13,6 +13,7 @@ import {
   patchPackageJsonScripts,
   patchReadme,
   patchTsconfig,
+  patchUserSliceForFirebase,
   slugify,
 } from "../src/patch.js";
 import type { Answers } from "../src/prompts.js";
@@ -208,16 +209,158 @@ describe("patchAppJsonPlugins", () => {
   });
 });
 
-describe("patchAppJsonBuildProperties", () => {
-  it("adds expo-build-properties with iOS 15.1 + Android minSdk 24", () => {
+describe("patchAppJsonPlugins — firebase-rn", () => {
+  it("firebase-rn → adds @react-native-firebase/app plugin", () => {
     seedAppJson([]);
-    patchAppJsonBuildProperties(tmp);
+    patchAppJsonPlugins(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    const j = readAppJson();
+    expect(j.expo.plugins).toContain("@react-native-firebase/app");
+  });
+
+  it("supabase (not firebase-rn, not imagePicker) → no-op", () => {
+    seedAppJson([]);
+    patchAppJsonPlugins(tmp, { ...baseAnswers, backendType: "supabase" });
+    expect(readAppJson().expo.plugins).toEqual([]);
+  });
+
+  it("firebase-rn idempotent — second pass adds no duplicate", () => {
+    seedAppJson([]);
+    patchAppJsonPlugins(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    patchAppJsonPlugins(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    const j = readAppJson();
+    expect(
+      j.expo.plugins.filter((e: unknown) => e === "@react-native-firebase/app").length,
+    ).toBe(1);
+  });
+});
+
+describe("patchUserSliceForFirebase", () => {
+  function seedUserSlice(): void {
+    const sliceDir = path.join(tmp, "src/core/redux/slices");
+    fs.mkdirSync(sliceDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sliceDir, "userSlice.ts"),
+      [
+        `// Minimal user shape per SPEC §6 ("dummy user shape").`,
+        `// \`accessToken\` is required by the axios interceptor in \`core/utils/config.ts\``,
+        `// — every request reads \`store.getState().user?.accessToken\` and attaches as`,
+        `// \`Bearer <token>\` if present. Apps replace shape but must keep the field.`,
+        `import { createSlice, PayloadAction } from "@reduxjs/toolkit";`,
+        ``,
+        `export type User = {`,
+        `  id: string | null;`,
+        `  name: string | null;`,
+        `  accessToken: string | null;`,
+        `};`,
+        ``,
+        `const initialState: User = { id: null, name: null, accessToken: null };`,
+        ``,
+        `const userSlice = createSlice({`,
+        `  name: "user",`,
+        `  initialState,`,
+        `  reducers: {`,
+        `    setUser: (state, action: PayloadAction<User>) => {`,
+        `      state.id = action.payload.id;`,
+        `      state.name = action.payload.name;`,
+        `      state.accessToken = action.payload.accessToken;`,
+        `    },`,
+        `    updateUser: (state, action: PayloadAction<Partial<User>>) => {`,
+        `      Object.assign(state, action.payload);`,
+        `    },`,
+        `    setAccessToken: (state, action: PayloadAction<string | null>) => {`,
+        `      state.accessToken = action.payload;`,
+        `    },`,
+        `    clearUser: (state) => {`,
+        `      state.id = null;`,
+        `      state.name = null;`,
+        `      state.accessToken = null;`,
+        `    },`,
+        `  },`,
+        `});`,
+        ``,
+        `export const { setUser, updateUser, setAccessToken, clearUser } = userSlice.actions;`,
+        `export default userSlice.reducer;`,
+        ``,
+      ].join("\n"),
+    );
+  }
+
+  it("removes accessToken from User type", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const src = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(src).not.toContain("accessToken: string | null");
+  });
+
+  it("removes accessToken from initialState", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const src = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(src).not.toContain("accessToken: null");
+  });
+
+  it("removes setAccessToken reducer", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const src = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(src).not.toContain("setAccessToken");
+  });
+
+  it("removes accessToken from setUser + clearUser reducers", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const src = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(src).not.toContain("state.accessToken");
+  });
+
+  it("preserves setUser, updateUser, clearUser", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const src = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(src).toContain("setUser");
+    expect(src).toContain("updateUser");
+    expect(src).toContain("clearUser");
+  });
+
+  it("idempotent — running twice yields same result", () => {
+    seedUserSlice();
+    patchUserSliceForFirebase(tmp);
+    const after1 = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    patchUserSliceForFirebase(tmp);
+    const after2 = fs.readFileSync(path.join(tmp, "src/core/redux/slices/userSlice.ts"), "utf8");
+    expect(after1).toBe(after2);
+  });
+
+  it("no-op when file is missing", () => {
+    expect(() => patchUserSliceForFirebase(tmp)).not.toThrow();
+  });
+});
+
+describe("patchAppJsonBuildProperties", () => {
+  it("adds expo-build-properties with iOS 15.1 + Android minSdk 24 (custom-backend)", () => {
+    seedAppJson([]);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
     const j = readAppJson();
     expect(j.expo.plugins).toEqual([
       [
         "expo-build-properties",
         {
           ios: { deploymentTarget: "15.1" },
+          android: { minSdkVersion: 24 },
+        },
+      ],
+    ]);
+  });
+
+  it("firebase-rn → adds useFrameworks: static to iOS config", () => {
+    seedAppJson([]);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    const j = readAppJson();
+    expect(j.expo.plugins).toEqual([
+      [
+        "expo-build-properties",
+        {
+          ios: { deploymentTarget: "15.1", useFrameworks: "static" },
           android: { minSdkVersion: 24 },
         },
       ],
@@ -231,7 +374,7 @@ describe("patchAppJsonBuildProperties", () => {
         { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } },
       ],
     ]);
-    patchAppJsonBuildProperties(tmp);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
     const j = readAppJson();
     // User's overrides preserved — nameOf-based dedupe means we do NOT
     // overwrite an existing entry's options.
@@ -245,7 +388,7 @@ describe("patchAppJsonBuildProperties", () => {
 
   it("coexists with other plugin entries (appends, doesn't replace)", () => {
     seedAppJson(["expo-router", ["expo-image-picker", { photosPermission: "x" }]]);
-    patchAppJsonBuildProperties(tmp);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
     const plugins = readAppJson().expo.plugins;
     expect(plugins).toHaveLength(3);
     expect(plugins[0]).toBe("expo-router");

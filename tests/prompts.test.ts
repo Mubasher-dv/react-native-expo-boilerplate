@@ -62,7 +62,15 @@ afterEach(() => {
 
 // ---------- validateEnvVars (v5-r6 pre-flight) ----------
 
-describe("validateEnvVars", () => {
+describe("validateEnvVars — shape checks (TTY mode)", () => {
+  beforeEach(() => {
+    // Shape tests run as TTY so presence checks don't interfere.
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: undefined });
+  });
+
   it("EXPO_PACKAGE_MANAGER=pnpm → throws", () => {
     process.env.EXPO_PACKAGE_MANAGER = "pnpm";
     expect(() => validateEnvVars()).toThrow(/expected "yarn" or "npm"/);
@@ -82,7 +90,7 @@ describe("validateEnvVars", () => {
     );
   });
 
-  it("all-empty env → no throw", () => {
+  it("all-empty env + TTY → no throw", () => {
     expect(() => validateEnvVars()).not.toThrow();
   });
 
@@ -104,6 +112,40 @@ describe("validateEnvVars", () => {
 
   it('EXPO_BACKEND_TYPE="firebase-js" → no throw', () => {
     process.env.EXPO_BACKEND_TYPE = "firebase-js";
+    expect(() => validateEnvVars()).not.toThrow();
+  });
+});
+
+describe("validateEnvVars — non-TTY presence checks", () => {
+  beforeEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: false });
+  });
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: undefined });
+  });
+
+  it("non-TTY + missing EXPO_INCLUDE_BOTTOM_SHEET → throws before fs", () => {
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_BACKEND_TYPE = "custom-backend";
+    expect(() => validateEnvVars()).toThrow(/EXPO_INCLUDE_BOTTOM_SHEET.*required/);
+  });
+
+  it("non-TTY + missing EXPO_INCLUDE_IMAGE_PICKER → throws before fs", () => {
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_BACKEND_TYPE = "custom-backend";
+    expect(() => validateEnvVars()).toThrow(/EXPO_INCLUDE_IMAGE_PICKER.*required/);
+  });
+
+  it("non-TTY + missing EXPO_BACKEND_TYPE → throws before fs", () => {
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    expect(() => validateEnvVars()).toThrow(/EXPO_BACKEND_TYPE.*required/);
+  });
+
+  it("non-TTY + all required vars set → no throw", () => {
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_BACKEND_TYPE = "supabase";
     expect(() => validateEnvVars()).not.toThrow();
   });
 });
@@ -169,6 +211,7 @@ describe("gatherAnswers", () => {
     process.env.EXPO_INCLUDE_BOTTOM_SHEET = "1";
     process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
     process.env.EXPO_PACKAGE_MANAGER = "yarn";
+    process.env.EXPO_BACKEND_TYPE = "supabase";
     const ans = await gatherAnswers();
     expect(ans).toEqual({
       primaryFont: "Inter",
@@ -176,14 +219,98 @@ describe("gatherAnswers", () => {
       bottomSheet: true,
       imagePicker: false,
       packageManager: "yarn",
-      backendType: "custom-backend",
+      backendType: "supabase",
     });
     expect(promptsMock).not.toHaveBeenCalled();
+  });
+
+  it("EXPO_BACKEND_TYPE=firebase-rn → backendType resolved from env, no prompt", async () => {
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_PACKAGE_MANAGER = "yarn";
+    process.env.EXPO_BACKEND_TYPE = "firebase-rn";
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("firebase-rn");
+    expect(promptsMock).not.toHaveBeenCalled();
+  });
+
+  it("no EXPO_BACKEND_TYPE + non-TTY → throws", async () => {
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_PACKAGE_MANAGER = "yarn";
+    // EXPO_BACKEND_TYPE not set
+    await expect(gatherAnswers()).rejects.toThrow(/EXPO_BACKEND_TYPE/);
   });
 
   it("missing bottom-sheet/image-picker + non-TTY → throws", async () => {
     process.env.EXPO_PACKAGE_MANAGER = "npm"; // Skip PM probe path.
     await expect(gatherAnswers()).rejects.toThrow(/not a TTY/);
+  });
+});
+
+describe("gatherAnswers — TTY backend prompt", () => {
+  beforeEach(() => {
+    // Override to TTY for this suite.
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+    process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
+    process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
+    process.env.EXPO_PACKAGE_MANAGER = "yarn";
+    // Default fallback for any un-consumed prompt call.
+    promptsMock.mockResolvedValue({ primaryFont: "" });
+  });
+
+  // Backend prompt is the FIRST question; font prompt follows.
+  // Firebase triggers a second SDK sub-prompt; Supabase/Custom do not.
+
+  it("TTY select supabase → backendType=supabase, no sub-prompt", async () => {
+    promptsMock
+      .mockResolvedValueOnce({ backend: "supabase" }) // step 1
+      .mockResolvedValueOnce({ primaryFont: "" });     // font
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("supabase");
+  });
+
+  it("TTY select custom-backend → backendType=custom-backend, no sub-prompt", async () => {
+    promptsMock
+      .mockResolvedValueOnce({ backend: "custom-backend" })
+      .mockResolvedValueOnce({ primaryFont: "" });
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("custom-backend");
+  });
+
+  it("TTY select firebase → sub-prompt → firebase-js", async () => {
+    promptsMock
+      .mockResolvedValueOnce({ backend: "firebase" })       // step 1
+      .mockResolvedValueOnce({ firebaseSdk: "firebase-js" }) // step 2
+      .mockResolvedValueOnce({ primaryFont: "" });            // font
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("firebase-js");
+  });
+
+  it("TTY select firebase → sub-prompt → firebase-rn", async () => {
+    promptsMock
+      .mockResolvedValueOnce({ backend: "firebase" })
+      .mockResolvedValueOnce({ firebaseSdk: "firebase-rn" })
+      .mockResolvedValueOnce({ primaryFont: "" });
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("firebase-rn");
+  });
+
+  it("TTY cancel on backend prompt (returns {}) → defaults to custom-backend", async () => {
+    promptsMock
+      .mockResolvedValueOnce({})                   // Ctrl-C on step 1
+      .mockResolvedValueOnce({ primaryFont: "" });
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("custom-backend");
+  });
+
+  it("TTY cancel on firebase sub-prompt → defaults to firebase-js", async () => {
+    promptsMock
+      .mockResolvedValueOnce({ backend: "firebase" })
+      .mockResolvedValueOnce({})                   // Ctrl-C on step 2
+      .mockResolvedValueOnce({ primaryFont: "" });
+    const ans = await gatherAnswers();
+    expect(ans.backendType).toBe("firebase-js");
   });
 });
 
@@ -200,6 +327,7 @@ describe("gatherAnswers font prompts", () => {
     process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
     process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
     process.env.EXPO_PACKAGE_MANAGER = "npm";
+    process.env.EXPO_BACKEND_TYPE = "custom-backend";
     vi.resetModules();
     const { gatherAnswers } = await import("../src/prompts.js");
     const answers = await gatherAnswers();
@@ -213,6 +341,7 @@ describe("gatherAnswers font prompts", () => {
     process.env.EXPO_INCLUDE_BOTTOM_SHEET = "0";
     process.env.EXPO_INCLUDE_IMAGE_PICKER = "0";
     process.env.EXPO_PACKAGE_MANAGER = "npm";
+    process.env.EXPO_BACKEND_TYPE = "custom-backend";
     vi.resetModules();
     const { gatherAnswers } = await import("../src/prompts.js");
     const answers = await gatherAnswers();

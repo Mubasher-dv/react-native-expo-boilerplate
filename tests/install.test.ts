@@ -66,8 +66,50 @@ describe("buildConditionalDeps", () => {
       "expo-image-picker",
     );
   });
-  it("empty when both false", () => {
-    expect(buildConditionalDeps(A)).toEqual([]);
+});
+
+describe("buildAlwaysInstalledList — no longer contains backend-conditional packages", () => {
+  it("does NOT contain @tanstack/react-query (moved to conditional)", () => {
+    expect(buildAlwaysInstalledList("react-native-worklets")).not.toContain("@tanstack/react-query");
+  });
+  it("does NOT contain axios (moved to conditional)", () => {
+    expect(buildAlwaysInstalledList("react-native-worklets")).not.toContain("axios");
+  });
+});
+
+describe("buildConditionalDeps — backend packages", () => {
+  it("firebase-js → installs firebase only", () => {
+    const deps = buildConditionalDeps({ ...A, backendType: "firebase-js" });
+    expect(deps).toContain("firebase");
+    expect(deps).not.toContain("@tanstack/react-query");
+    expect(deps).not.toContain("axios");
+    expect(deps).not.toContain("@supabase/supabase-js");
+  });
+
+  it("firebase-rn → installs 4 RN Firebase packages", () => {
+    const deps = buildConditionalDeps({ ...A, backendType: "firebase-rn" });
+    expect(deps).toContain("@react-native-firebase/app");
+    expect(deps).toContain("@react-native-firebase/auth");
+    expect(deps).toContain("@react-native-firebase/firestore");
+    expect(deps).toContain("@react-native-firebase/storage");
+    expect(deps).not.toContain("@tanstack/react-query");
+    expect(deps).not.toContain("axios");
+  });
+
+  it("supabase → installs TanStack + Supabase client, no axios", () => {
+    const deps = buildConditionalDeps({ ...A, backendType: "supabase" });
+    expect(deps).toContain("@tanstack/react-query");
+    expect(deps).toContain("@supabase/supabase-js");
+    expect(deps).not.toContain("axios");
+    expect(deps).not.toContain("firebase");
+  });
+
+  it("custom-backend → installs TanStack + axios", () => {
+    const deps = buildConditionalDeps({ ...A, backendType: "custom-backend" });
+    expect(deps).toContain("@tanstack/react-query");
+    expect(deps).toContain("axios");
+    expect(deps).not.toContain("firebase");
+    expect(deps).not.toContain("@supabase/supabase-js");
   });
 });
 

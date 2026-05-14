@@ -4,7 +4,7 @@
 // Decision-locked (rev 3): fonts type is plain `export enum Fonts` (NOT
 // `const enum`). See spec Decision #7.
 
-import type { Answers } from "./prompts.js";
+import type { Answers, BackendType } from "./prompts.js";
 import type { InstalledFamily } from "./fontsInstaller.js";
 
 const MARKER_START = "// codingpixel:fonts-start";
@@ -144,6 +144,27 @@ export function generateBottomSheetProviderBlocks(
   };
 }
 
+export function generateBackendInitImport(backendType: BackendType): string {
+  if (backendType === "firebase-js") return `import "@core/firebase";`;
+  if (backendType === "supabase") return `import "@core/supabase";`;
+  return "";
+}
+
+export function generateTanStackProviderBlocks(backendType: BackendType): {
+  importBlock: string;
+  openBlock: string;
+  closeBlock: string;
+} {
+  if (backendType === "firebase-js" || backendType === "firebase-rn") {
+    return { importBlock: "", openBlock: "", closeBlock: "" };
+  }
+  return {
+    importBlock: `import { TanStackQueryProvider } from "@core/tanstack";`,
+    openBlock: `        <TanStackQueryProvider>`,
+    closeBlock: `        </TanStackQueryProvider>`,
+  };
+}
+
 /**
  * Convenience: build the full sentinel-replacement map for `patchLayout`.
  * Caller passes resolved InstalledFamilys + hasSplashScreen explicitly so
@@ -157,12 +178,17 @@ export function buildLayoutReplacements(
 ): Record<string, string> {
   const fonts = generateUseFontsBlocks(primary, secondary, hasSplashScreen);
   const bs = generateBottomSheetProviderBlocks(answers.bottomSheet);
+  const ts = generateTanStackProviderBlocks(answers.backendType);
   return {
+    BACKEND_INIT_IMPORT: generateBackendInitImport(answers.backendType),
     USE_FONTS_IMPORT: fonts.importBlock,
     USE_FONTS_HOOK: fonts.hookBlock,
     USE_FONTS_GUARD: fonts.guardBlock,
     BOTTOM_SHEET_PROVIDER_IMPORT: bs.importBlock,
     BOTTOM_SHEET_PROVIDER_OPEN: bs.openBlock,
     BOTTOM_SHEET_PROVIDER_CLOSE: bs.closeBlock,
+    TANSTACK_PROVIDER_IMPORT: ts.importBlock,
+    TANSTACK_PROVIDER_OPEN: ts.openBlock,
+    TANSTACK_PROVIDER_CLOSE: ts.closeBlock,
   };
 }
