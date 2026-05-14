@@ -27,6 +27,7 @@ const ENV_KEYS = [
   "EXPO_INCLUDE_BOTTOM_SHEET",
   "EXPO_INCLUDE_IMAGE_PICKER",
   "EXPO_PACKAGE_MANAGER",
+  "EXPO_BACKEND_TYPE",
 ];
 
 let savedEnv: Record<string, string | undefined>;
@@ -91,6 +92,18 @@ describe("validateEnvVars", () => {
     process.env.EXPO_INCLUDE_IMAGE_PICKER = "1";
     process.env.EXPO_PRIMARY_FONT = "Inter";
     process.env.EXPO_SECONDARY_FONT = "";
+    expect(() => validateEnvVars()).not.toThrow();
+  });
+
+  it('EXPO_BACKEND_TYPE="invalid" → throws', () => {
+    process.env.EXPO_BACKEND_TYPE = "invalid";
+    expect(() => validateEnvVars()).toThrow(
+      /EXPO_BACKEND_TYPE.*expected one of/,
+    );
+  });
+
+  it('EXPO_BACKEND_TYPE="firebase-js" → no throw', () => {
+    process.env.EXPO_BACKEND_TYPE = "firebase-js";
     expect(() => validateEnvVars()).not.toThrow();
   });
 });
@@ -163,6 +176,7 @@ describe("gatherAnswers", () => {
       bottomSheet: true,
       imagePicker: false,
       packageManager: "yarn",
+      backendType: "custom-backend",
     });
     expect(promptsMock).not.toHaveBeenCalled();
   });

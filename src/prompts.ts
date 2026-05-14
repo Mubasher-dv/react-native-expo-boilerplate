@@ -4,13 +4,18 @@ import { log } from "./util.js";
 
 export type PackageManager = "yarn" | "npm";
 
+export type BackendType = "firebase-js" | "firebase-rn" | "supabase" | "custom-backend";
+
 export type Answers = {
   primaryFont: string;
   secondaryFont: string;
   bottomSheet: boolean;
   imagePicker: boolean;
   packageManager: PackageManager;
+  backendType: BackendType;
 };
+
+const BACKEND_TYPE_VALUES = ["firebase-js", "firebase-rn", "supabase", "custom-backend"] as const;
 
 const STRICT_BOOL_VARS = [
   "EXPO_INCLUDE_BOTTOM_SHEET",
@@ -38,6 +43,12 @@ export function validateEnvVars(): void {
     }
   }
   // EXPO_PRIMARY_FONT / EXPO_SECONDARY_FONT accept any string — no shape check.
+  const bt = process.env.EXPO_BACKEND_TYPE;
+  if (bt !== undefined && bt !== "" && !BACKEND_TYPE_VALUES.includes(bt as BackendType)) {
+    throw new Error(
+      `EXPO_BACKEND_TYPE: expected one of "firebase-js", "firebase-rn", "supabase", "custom-backend", got "${bt}"`,
+    );
+  }
 }
 
 function readBoolEnv(key: string): boolean | undefined {
@@ -159,5 +170,5 @@ export async function gatherAnswers(): Promise<Answers> {
   const packageManager = await detectPackageManager();
   log.info(`Package manager: ${packageManager}`);
 
-  return { primaryFont, secondaryFont, bottomSheet, imagePicker, packageManager };
+  return { primaryFont, secondaryFont, bottomSheet, imagePicker, packageManager, backendType: "custom-backend" };
 }

@@ -25,6 +25,7 @@ const A: Answers = {
   bottomSheet: false,
   imagePicker: false,
   packageManager: "yarn",
+  backendType: "custom-backend",
 };
 
 let target: string;

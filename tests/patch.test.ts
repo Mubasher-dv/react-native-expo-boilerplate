@@ -33,6 +33,7 @@ const baseAnswers: Answers = {
   bottomSheet: false,
   imagePicker: false,
   packageManager: "yarn",
+  backendType: "custom-backend",
 };
 
 describe("slugify", () => {
