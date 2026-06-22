@@ -66,13 +66,20 @@ export function cleanupBlankTemplate(target: string): void {
 }
 
 /**
- * Move create-expo-app's root `assets/*.png` icons (icon, splash-icon,
- * adaptive-icon, favicon) into `src/assets/` so the project has a single
- * unified assets layout. Caller updates `app.json` paths separately (see
+ * Move EVERYTHING create-expo-app drops in the root `assets/` directory into
+ * `src/assets/` so the project has a single unified assets layout (Deviation
+ * #22). Caller rewrites `app.json` paths separately (see
  * `patchAppJsonAssetPaths` in patch.ts).
  *
- * Idempotent — if the source file is missing (already moved or never existed),
- * skip it without erroring.
+ * Moves all top-level entries rather than a hardcoded filename list: Expo
+ * changes its template icon set across SDKs (e.g. SDK 56 replaced
+ * `adaptive-icon.png` with `android-icon-foreground/background/monochrome.png`),
+ * and a stale list left the new files behind in `assets/` while app.json was
+ * rewritten to `src/assets/` — prebuild then failed with `ENOENT`. Moving the
+ * whole directory's contents keeps disk + app.json in sync for any icon set.
+ *
+ * Idempotent — skips an entry whose destination already exists; if `assets/`
+ * ends up empty it is removed.
  */
 export function moveExpoIconsIntoSrcAssets(target: string): void {
   const rootAssets = path.join(target, "assets");
@@ -80,30 +87,22 @@ export function moveExpoIconsIntoSrcAssets(target: string): void {
   if (!fs.existsSync(rootAssets)) return;
   fs.mkdirSync(srcAssets, { recursive: true });
 
-  const movableFiles = [
-    "icon.png",
-    "splash-icon.png",
-    "adaptive-icon.png",
-    "favicon.png",
-  ];
   let moved = 0;
-  for (const file of movableFiles) {
-    const from = path.join(rootAssets, file);
-    const to = path.join(srcAssets, file);
-    if (fileExists(from) && !fileExists(to)) {
-      fs.renameSync(from, to);
-      moved++;
-    }
+  for (const entry of fs.readdirSync(rootAssets)) {
+    const from = path.join(rootAssets, entry);
+    const to = path.join(srcAssets, entry);
+    if (fs.existsSync(to)) continue; // collision — leave source in place
+    fs.renameSync(from, to);
+    moved++;
   }
 
-  // If root `assets/` is now empty (only icons lived there), remove it.
+  // If root `assets/` is now empty (everything moved), remove it.
   try {
-    const remaining = fs.readdirSync(rootAssets);
-    if (remaining.length === 0) fs.rmdirSync(rootAssets);
+    if (fs.readdirSync(rootAssets).length === 0) fs.rmdirSync(rootAssets);
   } catch {
-    // Not empty (user-added content) → leave alone.
+    // Not empty (user-added content survived a collision) → leave alone.
   }
   if (moved > 0) {
-    log.step(`Moved ${moved} icon file(s) from assets/ to src/assets/.`);
+    log.step(`Moved ${moved} asset(s) from assets/ to src/assets/.`);
   }
 }

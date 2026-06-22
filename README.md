@@ -63,6 +63,12 @@ Non-interactive (CI / slash-command) usage:
 EXPO_PRIMARY_FONT="Inter" EXPO_SECONDARY_FONT="Sansita" npx react-native-expo-boilerplate add fonts
 ```
 
+Multi-word family names must be quoted — the shell splits on spaces otherwise:
+
+```bash
+EXPO_PRIMARY_FONT="Open Sans" EXPO_SECONDARY_FONT="Noto Sans" npx react-native-expo-boilerplate add fonts
+```
+
 ### Library recipes
 
 **`bottom-sheet`** — installs `@gorhom/bottom-sheet` and drops 5 components into `src/ui/appComponents/`: `customBottomSheetModal`, `appBottomSheetView`, `appBottomSheetBackdrop`, `appBottomSheetScrollView`, `BottomSheetKeyboardAwareScrollView`.

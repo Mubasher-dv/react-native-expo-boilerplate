@@ -23,7 +23,14 @@ You will be prompted for primary + secondary font families.
 ### Non-interactive
 
 ```bash
-EXPO_PRIMARY_FONT=Inter EXPO_SECONDARY_FONT=Sansita \
+EXPO_PRIMARY_FONT="Inter" EXPO_SECONDARY_FONT="Sansita" \
+  npx --yes react-native-expo-boilerplate add fonts
+```
+
+Multi-word family names **must** be quoted — the shell splits on spaces otherwise:
+
+```bash
+EXPO_PRIMARY_FONT="Open Sans" EXPO_SECONDARY_FONT="Noto Sans" \
   npx --yes react-native-expo-boilerplate add fonts
 ```
 

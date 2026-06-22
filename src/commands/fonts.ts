@@ -126,21 +126,26 @@ export async function addFonts(target: string = process.cwd()): Promise<void> {
 
   // Prompt secondary (env var first).
   const envSecondary = process.env.EXPO_SECONDARY_FONT;
-  const secondary = envSecondary !== undefined
+  let secondary = envSecondary !== undefined
     ? envSecondary.trim()
     : await promptText("secondaryFont", "Secondary font family (e.g. Sansita; empty = primary only)");
 
-  // Parallel pre-check (allSettled — surface both rejections).
-  const familiesToCheck = secondary ? [primary, secondary] : [primary];
-  const checks = await Promise.allSettled(familiesToCheck.map((f) => checkPackageExists(f)));
-  const failures = checks
-    .map((r, i) => (r.status === "rejected" ? { family: familiesToCheck[i], err: r.reason as Error } : null))
-    .filter((x): x is { family: string; err: Error } => x !== null);
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures.map((f) => f.err),
-      `Font pre-check failed for: ${failures.map((f) => f.family).join(", ")}`,
-    );
+  // Pre-check. Primary is required — its failure aborts the recipe (the helpful
+  // UnknownFontError names the family + how to fix). Secondary is OPTIONAL: a
+  // bad/typo'd secondary must NOT prevent the primary from being installed, so
+  // its failure just drops it with a warning and we continue with primary only.
+  await checkPackageExists(primary);
+  if (secondary) {
+    try {
+      await checkPackageExists(secondary);
+    } catch (secErr) {
+      log.warn(
+        `Secondary font "${secondary}" unavailable ` +
+          `(${secErr instanceof Error ? secErr.message : String(secErr)}). ` +
+          `Installing primary "${primary}" only.`,
+      );
+      secondary = "";
+    }
   }
 
   // Install + sidecar.
@@ -203,5 +208,13 @@ export async function addFonts(target: string = process.cwd()): Promise<void> {
     `Fonts installed: primary=${primaryInstalled.displayName}${
       secondaryInstalled ? ", secondary=" + secondaryInstalled.displayName : ""
     }.`,
+  );
+  log.raw("");
+  log.info(
+    `Reference fonts via the Fonts enum, e.g. style={{ fontFamily: Fonts.REGULAR }} ` +
+      `(= "${primaryInstalled.fileBase}-Regular"). Do NOT use the family name with spaces ` +
+      `("${primaryInstalled.displayName}") — it falls back to the system font on Android. ` +
+      `Restart Metro with a cleared cache so the new .ttf files are picked up: ` +
+      `npx expo start -c`,
   );
 }

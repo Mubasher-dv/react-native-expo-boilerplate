@@ -126,9 +126,17 @@ export function patchAppJson(
  * Rewrite `app.json` asset paths from create-expo-app's `./assets/<file>`
  * defaults to `./src/assets/<file>` (Deviation #22 — unified asset layout).
  *
- * Pairs with `moveExpoIconsIntoSrcAssets` in scaffold.ts (which moves the
- * actual PNG files). Idempotent: only rewrites paths that start with `./assets/`,
- * so re-running on an already-patched app.json is a no-op.
+ * Walks the ENTIRE `expo` config recursively and rewrites every string value
+ * that begins with `./assets/`, rather than touching a hardcoded list of icon
+ * fields. This keeps the CLI correct as Expo evolves its template icon set —
+ * e.g. SDK 56 added `android.adaptiveIcon.backgroundImage` + `monochromeImage`
+ * alongside `foregroundImage`; a hardcoded list silently missed those and left
+ * a path pointing at a file that `moveExpoIconsIntoSrcAssets` never moved
+ * (prebuild then failed with `ENOENT … android-icon-foreground.png`).
+ *
+ * Pairs with `moveExpoIconsIntoSrcAssets` in scaffold.ts (which moves ALL of
+ * `assets/` into `src/assets/`). Idempotent: only `./assets/`-prefixed strings
+ * are rewritten, so re-running on an already-patched app.json is a no-op.
  */
 export function patchAppJsonAssetPaths(target: string): void {
   const p = path.join(target, "app.json");
@@ -136,27 +144,22 @@ export function patchAppJsonAssetPaths(target: string): void {
   const json = readJson<ExpoAppJson>(p);
   json.expo ??= {};
 
-  const rewrite = (value: string | undefined): string | undefined => {
-    if (!value) return value;
-    if (value.startsWith("./assets/")) {
-      return value.replace(/^\.\/assets\//, "./src/assets/");
+  const rewriteDeep = (node: unknown): unknown => {
+    if (typeof node === "string") {
+      return node.startsWith("./assets/")
+        ? node.replace(/^\.\/assets\//, "./src/assets/")
+        : node;
     }
-    return value;
+    if (Array.isArray(node)) return node.map(rewriteDeep);
+    if (node && typeof node === "object") {
+      const obj = node as Record<string, unknown>;
+      for (const key of Object.keys(obj)) obj[key] = rewriteDeep(obj[key]);
+      return obj;
+    }
+    return node;
   };
 
-  if (json.expo.icon) json.expo.icon = rewrite(json.expo.icon)!;
-  if (json.expo.splash?.image) {
-    json.expo.splash.image = rewrite(json.expo.splash.image)!;
-  }
-  if (json.expo.android?.adaptiveIcon?.foregroundImage) {
-    json.expo.android.adaptiveIcon.foregroundImage = rewrite(
-      json.expo.android.adaptiveIcon.foregroundImage,
-    )!;
-  }
-  if (json.expo.web?.favicon) {
-    json.expo.web.favicon = rewrite(json.expo.web.favicon)!;
-  }
-
+  rewriteDeep(json.expo);
   writeJson(p, json);
 }
 
@@ -200,50 +203,49 @@ export function patchAppJsonPlugins(target: string, answers: Answers): void {
 }
 
 /**
- * Pin iOS / Android native build properties at prebuild time via the
+ * Configure native build properties at prebuild time via the
  * `expo-build-properties` config plugin.
  *
- * Why: CocoaPods (Xcode 26+ toolchain) emits a deployment-version-mismatch
- * warning when a transitive pod declares an older iOS minimum than the
- * project's effective target. `expo-image` (always installed — see
- * `buildAlwaysInstalledList`) pulls `SDWebImage` 5.x, whose podspec declares
- * `platform :ios, '9.0'`, well below the Expo SDK 54 default of 15.1. Setting
- * `ios.deploymentTarget` here makes `expo prebuild` emit a Podfile that
- * normalizes every pod to the same minimum, silencing the warning.
+ * We deliberately do NOT pin `ios.deploymentTarget` or `android.minSdkVersion`.
+ * Both fields are opt-in (the plugin schema marks them `nullable`); it only
+ * throws `… needs to be at least version X` when the field is PRESENT and below
+ * the SDK floor. That floor rises with every Expo SDK (e.g. iOS jumped from
+ * 15.1 → 16.4 in SDK 56), so a hardcoded pin breaks the scaffold on the next
+ * SDK bump. Omitting them lets `expo prebuild` apply the installed SDK's own
+ * current defaults to the generated Podfile / Gradle — always valid, zero
+ * maintenance. (Trade-off: the cosmetic CocoaPods deployment-mismatch warning
+ * from transitive pods like SDWebImage may reappear during `pod install`; it's
+ * harmless and far preferable to a hard scaffold failure.)
  *
- * Values:
- * - `ios.deploymentTarget: "15.1"` — matches Expo SDK 54's default. Explicit
- *   so the value is stable across SDK bumps (and visible in app.json review).
- * - `android.minSdkVersion: 24` — also Expo SDK 54 default; pinned for parity.
+ * The ONLY remaining reason to emit an entry is `firebase-rn`, which needs
+ * `ios.useFrameworks: "static"` for the React Native Firebase pods. That option
+ * has no version floor, so it never goes stale. Other backends get no entry.
  *
- * Idempotent via `nameOf` equality (preserves a user-customized entry).
+ * Idempotent: re-running injects `useFrameworks` into an existing entry without
+ * clobbering other user-set keys.
  */
 export function patchAppJsonBuildProperties(target: string, answers: Answers): void {
+  // Only firebase-rn requires build-properties; nothing to pin otherwise.
+  if (answers.backendType !== "firebase-rn") return;
+
   const p = path.join(target, "app.json");
   const json = readJson<ExpoAppJson>(p);
   json.expo ??= {};
   json.expo.plugins ??= [];
-  const iosConfig: Record<string, unknown> = { deploymentTarget: "15.1" };
-  if (answers.backendType === "firebase-rn") {
-    iosConfig.useFrameworks = "static";
-  }
   const entry: [string, Record<string, unknown>] = [
     "expo-build-properties",
-    { ios: iosConfig, android: { minSdkVersion: 24 } },
+    { ios: { useFrameworks: "static" } },
   ];
   const existingIdx = json.expo.plugins.findIndex((e) => nameOf(e) === nameOf(entry));
   if (existingIdx === -1) {
     json.expo.plugins.push(entry);
-  } else if (answers.backendType === "firebase-rn") {
-    // Re-run with firebase-rn on a project previously scaffolded without it:
-    // inject useFrameworks into the existing entry rather than leaving it absent.
+  } else {
+    // Inject useFrameworks into the existing entry rather than leaving it absent.
     const existing = json.expo.plugins[existingIdx];
     if (Array.isArray(existing) && existing[1]) {
       const opts = existing[1] as Record<string, Record<string, unknown>>;
       opts.ios ??= {};
-      if (!opts.ios.useFrameworks) {
-        opts.ios.useFrameworks = "static";
-      }
+      opts.ios.useFrameworks ??= "static";
     }
   }
   writeJson(p, json);

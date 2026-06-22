@@ -55,12 +55,12 @@ export function buildAlwaysInstalledList(workletsPkg: string): string[] {
     // in app.json (default value "light"). Without it, prebuild warns:
     // "Install expo-system-ui in your project to enable this feature."
     "expo-system-ui",
-    // expo-build-properties — config plugin that pins iOS `deploymentTarget`
-    // (and android minSdkVersion) at prebuild time. Required to silence
-    // CocoaPods deployment-version-mismatch warnings on transitive pods that
-    // declare older iOS minimums (e.g. SDWebImage 5.x — pulled by expo-image —
-    // declares iOS 9.0 vs the Expo SDK 54 project default of 15.1). Plugin
-    // entry is wired in `patchAppJsonBuildProperties` (patch.ts).
+    // expo-build-properties — config plugin used only by the firebase-rn
+    // backend to set `ios.useFrameworks: "static"` (required by the React
+    // Native Firebase pods). We do NOT pin iOS deploymentTarget / android
+    // minSdkVersion — those floors rise per SDK and a stale pin breaks
+    // prebuild; see `patchAppJsonBuildProperties` (patch.ts). Installed for all
+    // backends (harmless config plugin) so the entry resolves when present.
     "expo-build-properties",
   ];
 }

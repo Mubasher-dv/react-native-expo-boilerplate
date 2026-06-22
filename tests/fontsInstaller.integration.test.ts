@@ -117,6 +117,32 @@ describe("installAndCopy — tarball-direct flow", () => {
     );
   });
 
+  it("Open Sans (multi-word) emits correct TTFs + InstalledFamily", async () => {
+    const tarballPath = await stageFakeTarball({
+      family: "Open Sans",
+      fileBase: "OpenSans",
+      variants: [
+        { token: "regular", dir: "400Regular" },
+        { token: "700", dir: "700Bold" },
+      ],
+    });
+
+    execaMock.mockResolvedValueOnce({ exitCode: 0, stdout: "https://x/open-sans.tgz", stderr: "" });
+    httpsGetMock.mockImplementationOnce((_url: string, cb: (res: unknown) => void) => {
+      const stream = fs.createReadStream(tarballPath);
+      cb(Object.assign(stream, { statusCode: 200, headers: {} }));
+      return { on: () => {} } as any;
+    });
+
+    const installed = await installAndCopy(tmp, "Open Sans", "primary");
+
+    expect(installed.displayName).toBe("Open Sans");
+    expect(installed.fileBase).toBe("OpenSans");
+    expect(installed.variants.map((v) => v.enumKey).sort()).toEqual(["BOLD", "REGULAR"]);
+    expect(fs.existsSync(path.join(tmp, "src/assets/fonts/OpenSans-Regular.ttf"))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "src/assets/fonts/OpenSans-Bold.ttf"))).toBe(true);
+  });
+
   it("M6 invariant: package.json + lockfile untouched after installAndCopy", async () => {
     const tarballPath = await stageFakeTarball({
       family: "Inter",

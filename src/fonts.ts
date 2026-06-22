@@ -49,6 +49,18 @@ export function generateFontsEnumFile(
     );
   }
   lines.push("// Re-run `react-native-expo-boilerplate add fonts` to change.");
+  lines.push("//");
+  lines.push("// Usage: ALWAYS reference fonts through this enum, e.g.");
+  lines.push("//   <Text style={{ fontFamily: Fonts.REGULAR }}>Hi</Text>");
+  lines.push("// Each value is the REGISTERED font key (family name with spaces stripped,");
+  lines.push("// weight-suffixed) — this is the only name React Native matches on BOTH iOS");
+  lines.push('// and Android. Do NOT use the human family name with spaces (e.g. "Noto Sans"):');
+  lines.push('// it will silently fall back to the system font on Android. Only `Fonts.*`');
+  lines.push(
+    `//   (e.g. "${primary.fileBase}${
+      (primary.variants.find((v) => v.enumKey === "REGULAR") ?? primary.variants[0])?.suffix ?? "-Regular"
+    }") renders.`,
+  );
   lines.push("export enum Fonts {");
   for (const v of primary.variants) {
     lines.push(`  ${v.enumKey} = "${primary.fileBase}${v.suffix}",`);

@@ -214,4 +214,59 @@ describe("addFonts recipe", () => {
     expect(fontsTsContent).toContain("export enum Fonts {");
     expect(fontsTsContent).toContain("REGULAR");
   });
+
+  it("Open Sans (multi-word) primary-only → TTF + sidecar + fonts.ts + layout correct", async () => {
+    const tarball = await stageFontTarball("Open Sans", "OpenSans");
+    mockFontFetch(tarball);
+    promptsMock
+      .mockResolvedValueOnce({ primaryFont: "Open Sans" })
+      .mockResolvedValueOnce({ secondaryFont: "" });
+    const { addFonts } = await import("../../src/commands/fonts.js");
+    await addFonts(tmp);
+
+    expect(fs.existsSync(path.join(tmp, "src/assets/fonts/OpenSans-Regular.ttf"))).toBe(true);
+
+    const sidecar = JSON.parse(
+      fs.readFileSync(path.join(tmp, "src/assets/fonts/.codingpixel-fonts.json"), "utf8"),
+    );
+    expect(sidecar.primary.displayName).toBe("Open Sans");
+    expect(sidecar.primary.fileBase).toBe("OpenSans");
+
+    const fontsTsContent = fs.readFileSync(path.join(tmp, "src/ui/theme/fonts.ts"), "utf8");
+    expect(fontsTsContent).toContain('REGULAR = "OpenSans-Regular"');
+
+    const layout = fs.readFileSync(path.join(tmp, "src/app/_layout.tsx"), "utf8");
+    expect(layout).toContain("OpenSans-Regular.ttf");
+  });
+
+  it("bad secondary does NOT abort a valid primary — installs primary, warns, drops secondary", async () => {
+    const tarball = await stageFontTarball("Inter", "Inter");
+    promptsMock
+      .mockResolvedValueOnce({ primaryFont: "Inter" })
+      .mockResolvedValueOnce({ secondaryFont: "Not A Real Font" });
+    // checkPackageExists(primary) → exists
+    execaMock.mockResolvedValueOnce({ exitCode: 0, stdout: "ok", stderr: "" });
+    // checkPackageExists(secondary) → 404 (UnknownFontError, caught + dropped)
+    execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: "", stderr: "npm error code E404" });
+    // installAndCopy(primary) → dist.tarball + download
+    execaMock.mockResolvedValueOnce({ exitCode: 0, stdout: "https://x/pkg.tgz", stderr: "" });
+    httpsGetMock.mockImplementationOnce((_url: string, cb: (res: any) => void) => {
+      const stream = fs.createReadStream(tarball);
+      cb(Object.assign(stream, { statusCode: 200, headers: {} }));
+      return { on: () => {} } as any;
+    });
+
+    const { addFonts } = await import("../../src/commands/fonts.js");
+    await addFonts(tmp);
+
+    // Primary landed despite the bad secondary.
+    expect(fs.existsSync(path.join(tmp, "src/assets/fonts/Inter-Regular.ttf"))).toBe(true);
+    const sidecar = JSON.parse(
+      fs.readFileSync(path.join(tmp, "src/assets/fonts/.codingpixel-fonts.json"), "utf8"),
+    );
+    expect(sidecar.primary.displayName).toBe("Inter");
+    expect(sidecar.secondary).toBeNull();
+    const fontsTs = fs.readFileSync(path.join(tmp, "src/ui/theme/fonts.ts"), "utf8");
+    expect(fontsTs).toContain('REGULAR = "Inter-Regular"');
+  });
 });

@@ -194,31 +194,30 @@ async function main(): Promise<void> {
   let secondaryInstalled: InstalledFamily | null = null;
   if (answers.primaryFont) {
     try {
-      const familiesToCheck = answers.secondaryFont
-        ? [answers.primaryFont, answers.secondaryFont]
-        : [answers.primaryFont];
-      const checks = await Promise.allSettled(
-        familiesToCheck.map((f) => checkPackageExists(f)),
-      );
-      const failures = checks
-        .map((r, i) =>
-          r.status === "rejected"
-            ? { family: familiesToCheck[i], err: r.reason as Error }
-            : null,
-        )
-        .filter((x): x is { family: string; err: Error } => x !== null);
-      if (failures.length > 0) {
-        throw new AggregateError(
-          failures.map((f) => f.err),
-          `Font pre-check failed for: ${failures.map((f) => f.family).join(", ")}`,
-        );
+      // Primary is required for fonts — its failure skips font setup entirely.
+      await checkPackageExists(answers.primaryFont);
+
+      // Secondary is OPTIONAL: a bad/typo'd secondary must NOT abort the primary.
+      // If its existence check fails, warn and continue with primary only.
+      let secondaryFamily = answers.secondaryFont;
+      if (secondaryFamily) {
+        try {
+          await checkPackageExists(secondaryFamily);
+        } catch (secErr) {
+          log.warn(
+            `Secondary font "${secondaryFamily}" unavailable ` +
+              `(${secErr instanceof Error ? secErr.message : String(secErr)}). ` +
+              `Installing primary "${answers.primaryFont}" only.`,
+          );
+          secondaryFamily = "";
+        }
       }
 
       log.step(`Installing primary font "${answers.primaryFont}" via tarball fetch …`);
       primaryInstalled = await installAndCopy(target.dir, answers.primaryFont, "primary");
-      if (answers.secondaryFont) {
-        log.step(`Installing secondary font "${answers.secondaryFont}" via tarball fetch …`);
-        secondaryInstalled = await installAndCopy(target.dir, answers.secondaryFont, "secondary");
+      if (secondaryFamily) {
+        log.step(`Installing secondary font "${secondaryFamily}" via tarball fetch …`);
+        secondaryInstalled = await installAndCopy(target.dir, secondaryFamily, "secondary");
       }
       writeSidecar(target.dir, {
         schemaVersion: 1,
@@ -228,7 +227,8 @@ async function main(): Promise<void> {
       });
     } catch (err) {
       log.warn(
-        `Font setup failed: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Font setup failed for primary "${answers.primaryFont}": ` +
+          `${err instanceof Error ? err.message : String(err)}. ` +
           `Continuing scaffold without fonts. Re-run \`react-native-expo-boilerplate add fonts\` later.`,
       );
       primaryInstalled = null;

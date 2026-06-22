@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <AppWrapper>
       <AppText size={20} color={Colors.BLACK}>
-        Hello from codingpixel-expo-app 👋
+        Hello from react-native-expo-app 👋
       </AppText>
     </AppWrapper>
   );

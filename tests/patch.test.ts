@@ -160,6 +160,37 @@ describe("patchAppJsonAssetPaths", () => {
     expect(j.expo.web.favicon).toBe("./src/assets/favicon.png");
   });
 
+  it("rewrites the full SDK 56 adaptive-icon set (foreground/background/monochrome) + nested plugin paths", () => {
+    fs.writeFileSync(
+      path.join(tmp, "app.json"),
+      JSON.stringify({
+        expo: {
+          icon: "./assets/icon.png",
+          android: {
+            adaptiveIcon: {
+              foregroundImage: "./assets/android-icon-foreground.png",
+              backgroundImage: "./assets/android-icon-background.png",
+              monochromeImage: "./assets/android-icon-monochrome.png",
+            },
+          },
+          plugins: [
+            ["expo-splash-screen", { image: "./assets/splash-icon.png" }],
+          ],
+        },
+      }, null, 2),
+    );
+
+    patchAppJsonAssetPaths(tmp);
+    const j = readAppJson();
+    const ai = j.expo.android.adaptiveIcon;
+    expect(ai.foregroundImage).toBe("./src/assets/android-icon-foreground.png");
+    expect(ai.backgroundImage).toBe("./src/assets/android-icon-background.png");
+    expect(ai.monochromeImage).toBe("./src/assets/android-icon-monochrome.png");
+    expect(j.expo.icon).toBe("./src/assets/icon.png");
+    // Recurses into plugin option arrays too.
+    expect(j.expo.plugins[0][1].image).toBe("./src/assets/splash-icon.png");
+  });
+
   it("idempotent — already-patched paths stay unchanged", () => {
     fs.writeFileSync(
       path.join(tmp, "app.json"),
@@ -337,58 +368,57 @@ describe("patchUserSliceForFirebase", () => {
 });
 
 describe("patchAppJsonBuildProperties", () => {
-  it("adds expo-build-properties with iOS 15.1 + Android minSdk 24 (custom-backend)", () => {
+  it("does NOT pin SDK floors — no build-properties entry for custom-backend", () => {
     seedAppJson([]);
     patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
-    const j = readAppJson();
-    expect(j.expo.plugins).toEqual([
-      [
-        "expo-build-properties",
-        {
-          ios: { deploymentTarget: "15.1" },
-          android: { minSdkVersion: 24 },
-        },
-      ],
-    ]);
+    expect(readAppJson().expo.plugins).toEqual([]);
   });
 
-  it("firebase-rn → adds useFrameworks: static to iOS config", () => {
+  it("does NOT add build-properties for supabase or firebase-js", () => {
+    seedAppJson([]);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "supabase" });
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-js" });
+    expect(readAppJson().expo.plugins).toEqual([]);
+  });
+
+  it("firebase-rn → adds build-properties with ONLY ios.useFrameworks static (no pinned floors)", () => {
     seedAppJson([]);
     patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-rn" });
-    const j = readAppJson();
-    expect(j.expo.plugins).toEqual([
-      [
-        "expo-build-properties",
-        {
-          ios: { deploymentTarget: "15.1", useFrameworks: "static" },
-          android: { minSdkVersion: 24 },
-        },
-      ],
+    expect(readAppJson().expo.plugins).toEqual([
+      ["expo-build-properties", { ios: { useFrameworks: "static" } }],
     ]);
   });
 
-  it("idempotent + preserves a user-customized entry on rerun", () => {
+  it("firebase-rn idempotent — injects useFrameworks into an existing entry, preserves user keys, second run no-op", () => {
     seedAppJson([
-      [
-        "expo-build-properties",
-        { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } },
-      ],
+      ["expo-build-properties", { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } }],
     ]);
-    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
-    const j = readAppJson();
-    // User's overrides preserved — nameOf-based dedupe means we do NOT
-    // overwrite an existing entry's options.
-    expect(j.expo.plugins).toEqual([
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    const after1 = JSON.stringify(readAppJson());
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-rn" });
+    const after2 = JSON.stringify(readAppJson());
+    expect(after1).toBe(after2);
+    expect(readAppJson().expo.plugins).toEqual([
       [
         "expo-build-properties",
-        { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } },
+        { ios: { deploymentTarget: "16.0", useFrameworks: "static" }, android: { minSdkVersion: 26 } },
       ],
     ]);
   });
 
-  it("coexists with other plugin entries (appends, doesn't replace)", () => {
-    seedAppJson(["expo-router", ["expo-image-picker", { photosPermission: "x" }]]);
+  it("custom-backend leaves an existing user build-properties entry untouched", () => {
+    seedAppJson([
+      ["expo-build-properties", { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } }],
+    ]);
     patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "custom-backend" });
+    expect(readAppJson().expo.plugins).toEqual([
+      ["expo-build-properties", { ios: { deploymentTarget: "16.0" }, android: { minSdkVersion: 26 } }],
+    ]);
+  });
+
+  it("coexists with other plugin entries (firebase-rn appends, doesn't replace)", () => {
+    seedAppJson(["expo-router", ["expo-image-picker", { photosPermission: "x" }]]);
+    patchAppJsonBuildProperties(tmp, { ...baseAnswers, backendType: "firebase-rn" });
     const plugins = readAppJson().expo.plugins;
     expect(plugins).toHaveLength(3);
     expect(plugins[0]).toBe("expo-router");
